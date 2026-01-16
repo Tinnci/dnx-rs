@@ -4,10 +4,11 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use dnx_core::events::{DnxEvent, DnxObserver, DnxPhase, LogLevel};
-use dnx_core::session::SessionConfig;
+use dnx_core::session::{DnxSession, SessionConfig};
 
 /// Maximum log entries to keep.
 const MAX_LOG_ENTRIES: usize = 1000;
@@ -45,6 +46,8 @@ pub struct App {
     pub is_running: bool,
     /// Shared observer for receiving events from DnX session.
     pub observer: Arc<TuiObserver>,
+    /// Background session thread handle.
+    session_thread: Option<JoinHandle<()>>,
 }
 
 /// Which pane is focused.
@@ -133,6 +136,7 @@ impl App {
             input_focus: 0,
             is_running: false,
             observer: Arc::new(TuiObserver::new()),
+            session_thread: None,
         }
     }
 
@@ -267,12 +271,16 @@ impl App {
     }
 
     fn start_operation(&mut self) {
+        if self.is_running {
+            return;
+        }
+
         self.is_running = true;
         self.phase = DnxPhase::WaitingForDevice;
         self.progress = 0;
         self.operation = "Starting...".to_string();
 
-        // Update config
+        // Update config struct first
         self.config.fw_dnx_path = if self.fw_dnx_path.is_empty() {
             None
         } else {
@@ -294,7 +302,31 @@ impl App {
             Some(self.os_image_path.clone())
         };
 
+        // Clone config for the thread
+        let session_config = self.config.clone();
+
         self.add_log(LogLevel::Info, "Operation started");
+
+        // Clone observer for the thread
+        let observer = self.observer.clone();
+
+        // Spawn session thread
+        let handle = thread::spawn(move || {
+            let mut session = DnxSession::with_observer(session_config, observer.clone());
+            match session.run() {
+                Ok(_) => {
+                    observer.on_event(&DnxEvent::Complete);
+                }
+                Err(e) => {
+                    observer.on_event(&DnxEvent::Error {
+                        code: 1, // Generic error code
+                        message: format!("Session error: {}", e),
+                    });
+                }
+            }
+        });
+
+        self.session_thread = Some(handle);
     }
 
     /// Called on each tick - process observer events.

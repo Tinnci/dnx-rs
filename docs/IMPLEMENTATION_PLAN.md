@@ -202,17 +202,24 @@ crates/dnx-core/
 ### Phase 3: 状态机完善 (Completed ✅)
 1. [x] 完整状态定义 (`state/machine.rs`) - **Done**
 2. [x] 核心 ACK Handler 框架 (`state/handlers.rs`) - **Done**
-3. [x] Payload 逻辑集成
+3. [x] Payload 逻辑集成 - **Done**
    - [x] `handle_ruphs`/`handle_ruph`: Profile Header
    - [x] `handle_lofw`/`handle_hifw`: Low/High 128K
    - [x] `handle_psfw1`/`handle_psfw2`/`handle_ssfw`/`handle_vedfw`: Chunked FW
    - [x] `handle_rosip`/`handle_rimg`: OS image chunks
-4. [ ] 设备重枚举处理 (PID 0E004 -> 0A14 切换逻辑) - **Pending real hardware testing**
+4. [x] 多平台支持 (Moorefield/Medfield) - **Done**
+   - [x] 添加 Moorefield PID (0x0A2C, 0x0A65)
+   - [x] 优化设备发现 (100ms 快速轮询代替 1s 轮询，支持极短窗口期)
+5. [ ] 设备重枚举处理 (PID 0E004 -> 0A14 切换逻辑) - **Pending real hardware testing**
 
 ### Phase 4: 事件系统与 UI 层 (Completed ✅)
 1. [x] Event/Observer 系统 (`events.rs`) - **Done**
 2. [x] Session 编排器 (`session.rs`) - **Done**
 3. [x] CLI 重构 (`apps/cli`) - **Done**
+4. [x] TUI 开发 (`apps/tui`) - **Done**
+   - [x] 基于 Ratatui 的多面板布局 (Main, Logs, Help)
+   - [x] 后台线程运行 Session (解决 UI 冻结)
+   - [x] 实时进度条与详细日志视图
 
 ### Phase 5: 测试与文档 (In Progress)
 1. [x] Mock Transport 基础测试 - **Done** (12 tests passing)

@@ -14,7 +14,7 @@ use crate::state::machine::StateMachineContext;
 use crate::transport::{NusbTransport, TransportError, UsbTransport};
 
 /// Configuration for a DnX session.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SessionConfig {
     /// Path to FW DnX binary.
     pub fw_dnx_path: Option<String>,
@@ -118,15 +118,30 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         info!("Waiting for device...");
         let timeout = Duration::from_secs(self.config.retry_timeout_secs.max(60));
         let start = std::time::Instant::now();
+        let mut poll_count = 0u64;
 
         loop {
+            poll_count += 1;
+
             match NusbTransport::open() {
-                Ok(t) => return Ok(t),
+                Ok(t) => {
+                    info!(
+                        vid = format!("{:04X}", t.vendor_id()),
+                        pid = format!("{:04X}", t.product_id()),
+                        "Device found after {} polls",
+                        poll_count
+                    );
+                    return Ok(t);
+                }
                 Err(TransportError::DeviceNotFound { .. }) => {
                     if start.elapsed() > timeout {
-                        return Err(anyhow!("Timeout waiting for device"));
+                        return Err(anyhow!(
+                            "Timeout waiting for device after {}s",
+                            timeout.as_secs()
+                        ));
                     }
-                    thread::sleep(Duration::from_secs(1));
+                    // Fast polling: 100ms instead of 1s
+                    thread::sleep(Duration::from_millis(100));
                 }
                 Err(e) => return Err(e.into()),
             }
