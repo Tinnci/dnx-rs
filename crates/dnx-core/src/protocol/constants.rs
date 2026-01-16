@@ -9,11 +9,25 @@
 /// Intel Corporation Vendor ID
 pub const INTEL_VENDOR_ID: u16 = 0x8086;
 
+// Medfield Platform PIDs
 /// Medfield platform Product ID (ROM stage)
 pub const MEDFIELD_PRODUCT_ID: u16 = 0xE004;
+/// Medfield FW stage PID
+pub const MEDFIELD_FW_PID: u16 = 0x0A14;
 
-/// Alternative PIDs for different platform stages
-pub const MEDFIELD_FW_PID: u16 = 0x0A14; // After FW DnX loaded
+// Moorefield Platform PIDs (Atom Z3560/Z3580)
+/// Moorefield platform Product ID (DnX mode)
+pub const MOOREFIELD_PRODUCT_ID: u16 = 0x0A2C;
+/// Moorefield alternative PID
+pub const MOOREFIELD_ALT_PID: u16 = 0x0A65;
+
+/// All supported PIDs for device discovery
+pub const SUPPORTED_PIDS: &[u16] = &[
+    MEDFIELD_PRODUCT_ID,
+    MEDFIELD_FW_PID,
+    MOOREFIELD_PRODUCT_ID,
+    MOOREFIELD_ALT_PID,
+];
 
 // ============================================================================
 // Size Constants

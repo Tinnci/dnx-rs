@@ -7,7 +7,7 @@ use tracing::{debug, info, instrument};
 
 use super::traits::{TransportError, UsbTransport};
 use crate::protocol::AckCode;
-use crate::protocol::constants::{INTEL_VENDOR_ID, MEDFIELD_PRODUCT_ID};
+use crate::protocol::constants::{INTEL_VENDOR_ID, SUPPORTED_PIDS};
 
 /// nusb-based USB transport.
 pub struct NusbTransport {
@@ -19,10 +19,26 @@ pub struct NusbTransport {
 }
 
 impl NusbTransport {
-    /// Open the first matching Intel Medfield device.
+    /// Open any matching Intel DnX device (tries all supported PIDs).
     #[instrument(level = "info")]
     pub fn open() -> Result<Self, TransportError> {
-        Self::open_with_ids(INTEL_VENDOR_ID, MEDFIELD_PRODUCT_ID)
+        let devices = list_devices()
+            .wait()
+            .map_err(|e| TransportError::OpenFailed(e.to_string()))?;
+
+        // Try to find any Intel device with a supported PID
+        for device_info in devices {
+            if device_info.vendor_id() == INTEL_VENDOR_ID
+                && SUPPORTED_PIDS.contains(&device_info.product_id())
+            {
+                return Self::open_device_info(device_info);
+            }
+        }
+
+        Err(TransportError::DeviceNotFound {
+            vid: INTEL_VENDOR_ID,
+            pid: 0,
+        })
     }
 
     /// Open a device with specific VID/PID.
@@ -34,9 +50,16 @@ impl NusbTransport {
             .find(|d| d.vendor_id() == vid && d.product_id() == pid)
             .ok_or(TransportError::DeviceNotFound { vid, pid })?;
 
+        Self::open_device_info(device_info)
+    }
+
+    fn open_device_info(device_info: nusb::DeviceInfo) -> Result<Self, TransportError> {
+        let vid = device_info.vendor_id();
+        let pid = device_info.product_id();
+
         info!(
-            vendor_id = %format!("{:04X}", device_info.vendor_id()),
-            product_id = %format!("{:04X}", device_info.product_id()),
+            vendor_id = %format!("{:04X}", vid),
+            product_id = %format!("{:04X}", pid),
             "Found device"
         );
 
