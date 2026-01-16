@@ -204,8 +204,11 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                     return Ok(HandleResult::NeedReEnumerate);
                 }
                 Err(e) => {
-                    warn!(error = ?e, "Read error");
-                    thread::sleep(Duration::from_millis(100));
+                    // Intel xFSTK uses extensive retries.
+                    // We shouldn't fail immediately on transient read errors.
+                    // Log it as a debug/warn but keep trying.
+                    warn!(error = ?e, "Transient read error, retrying...");
+                    thread::sleep(Duration::from_millis(50));
                     continue;
                 }
             };
