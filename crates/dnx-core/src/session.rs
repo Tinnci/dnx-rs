@@ -40,9 +40,9 @@ pub struct DnxSession<O: DnxObserver> {
     observer: Arc<O>,
     // Loaded file data
     fw_dnx_data: Option<Vec<u8>>,
-    fw_image_data: Option<Vec<u8>>,
+    fw_image: Option<crate::payload::FirmwareImage>,
     os_dnx_data: Option<Vec<u8>>,
-    os_image_data: Option<Vec<u8>>,
+    os_image: Option<crate::payload::OsImage>,
 }
 
 impl DnxSession<TracingObserver> {
@@ -59,9 +59,9 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
             config,
             observer,
             fw_dnx_data: None,
-            fw_image_data: None,
+            fw_image: None,
             os_dnx_data: None,
-            os_image_data: None,
+            os_image: None,
         }
     }
 
@@ -73,7 +73,8 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         }
         if let Some(path) = &self.config.fw_image_path {
             info!(path = %path, "Loading FW Image");
-            self.fw_image_data = Some(std::fs::read(path)?);
+            let data = std::fs::read(path)?;
+            self.fw_image = Some(crate::payload::FirmwareImage::from_bytes(data)?);
         }
         if let Some(path) = &self.config.os_dnx_path {
             info!(path = %path, "Loading OS DnX");
@@ -81,7 +82,8 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         }
         if let Some(path) = &self.config.os_image_path {
             info!(path = %path, "Loading OS Image");
-            self.os_image_data = Some(std::fs::read(path)?);
+            let data = std::fs::read(path)?;
+            self.os_image = Some(crate::payload::OsImage::from_bytes(data)?);
         }
         Ok(())
     }
@@ -170,9 +172,9 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                 observer: self.observer.as_ref(),
                 state: &mut state,
                 fw_dnx_data: self.fw_dnx_data.as_deref(),
-                fw_image_data: self.fw_image_data.as_deref(),
+                fw_image: self.fw_image.as_ref(),
                 os_dnx_data: self.os_dnx_data.as_deref(),
-                os_image_data: self.os_image_data.as_deref(),
+                os_image: self.os_image.as_ref(),
             };
 
             let result = handle_ack(&ack, &mut ctx)?;

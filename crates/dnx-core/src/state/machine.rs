@@ -120,12 +120,22 @@ pub struct StateMachineContext {
     pub gp_flags: u32,
     /// IFWI wipe enabled.
     pub ifwi_wipe_enable: bool,
-    /// Chunk trackers for various FW components.
-    pub psfw1_tracker: ChunkTracker,
-    pub psfw2_tracker: ChunkTracker,
-    pub ssfw_tracker: ChunkTracker,
-    pub vedfw_tracker: ChunkTracker,
-    pub rom_patch_tracker: ChunkTracker,
+
+    // Chunk state for FW components (using payload::ChunkState)
+    /// PSFW1 chunk state.
+    pub psfw1_state: crate::payload::ChunkState,
+    /// PSFW2 chunk state.
+    pub psfw2_state: crate::payload::ChunkState,
+    /// SSFW chunk state.
+    pub ssfw_state: crate::payload::ChunkState,
+    /// VEDFW chunk state.
+    pub vedfw_state: crate::payload::ChunkState,
+    /// ROM Patch chunk state.
+    pub rom_patch_state: crate::payload::ChunkState,
+
+    // OS chunk state
+    /// OS image chunk state.
+    pub os_image_state: crate::payload::OsChunkState,
 }
 
 impl StateMachineContext {

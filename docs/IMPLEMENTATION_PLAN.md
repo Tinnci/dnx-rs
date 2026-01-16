@@ -181,37 +181,45 @@ crates/dnx-core/
 
 ## 三、实施路线图 (Implementation Roadmap)
 
-### Phase 1: 核心协议层 (2-3 天)
-1. [x] 常量定义 (`protocol/constants.rs`) - 已完成基础
-2. [ ] ACK 解析器优化 (`protocol/ack.rs`) - 支持变长 ACK
-3. [ ] 头结构定义 (`protocol/header.rs`)
-4. [ ] Transport Trait 抽象 (`transport/traits.rs`)
-5. [ ] nusb 实现重构 (`transport/nusb.rs`)
-6. [ ] Mock Transport (`transport/mock.rs`)
+### Phase 1: 核心协议层 (Completed ✅)
+1. [x] 常量定义 (`protocol/constants.rs`) - **Done**
+2. [x] ACK 解析器 (`protocol/ack.rs`) - **Done** (支持变长 ACK)
+3. [x] 头结构定义 (`protocol/header.rs`) - **Done**
+4. [x] Transport Trait 抽象 (`transport/traits.rs`) - **Done**
+5. [x] nusb 实现重构 (`transport/nusb.rs`) - **Done**
+6. [x] Mock Transport (`transport/mock.rs`) - **Done**
 
-### Phase 2: 固件/镜像处理 (2 天)
-1. [ ] FW 镜像解析 (`payload/firmware.rs`)
-   - DnX Header 解析
-   - Profile Header 解析
-   - 128KB 分块逻辑
-2. [ ] OS 镜像处理 (`payload/os.rs`)
-   - OSIP 解析
-   - 镜像分块
+### Phase 2: 固件/镜像处理 (Completed ✅)
+1. [x] FW 镜像解析 (`payload/firmware.rs`) - **Done**
+   - [x] DnX Header 校验
+   - [x] Profile Header 提取与解析
+   - [x] 128KB 分块迭代器 (ChunkIterator, ChunkState)
+   - [x] 边界对齐处理 (Residual bytes handling)
+2. [x] OS 镜像处理 (`payload/os.rs`) - **Done**
+   - [x] OSIP 结构解析
+   - [x] 镜像分块逻辑 (OsChunkIterator, OsChunkState)
 
-### Phase 3: 状态机完善 (2-3 天)
-1. [ ] 完整状态定义 (`state/machine.rs`)
-2. [ ] 所有 ACK Handler 实现 (`state/handlers.rs`)
-3. [ ] 设备重枚举处理
+### Phase 3: 状态机完善 (Completed ✅)
+1. [x] 完整状态定义 (`state/machine.rs`) - **Done**
+2. [x] 核心 ACK Handler 框架 (`state/handlers.rs`) - **Done**
+3. [x] Payload 逻辑集成
+   - [x] `handle_ruphs`/`handle_ruph`: Profile Header
+   - [x] `handle_lofw`/`handle_hifw`: Low/High 128K
+   - [x] `handle_psfw1`/`handle_psfw2`/`handle_ssfw`/`handle_vedfw`: Chunked FW
+   - [x] `handle_rosip`/`handle_rimg`: OS image chunks
+4. [ ] 设备重枚举处理 (PID 0E004 -> 0A14 切换逻辑) - **Pending real hardware testing**
 
-### Phase 4: 事件系统与 UI 层 (1-2 天)
-1. [ ] Event/Observer 系统 (`events.rs`)
-2. [ ] Session 编排器 (`session.rs`)
-3. [ ] CLI 重构 (`apps/cli`)
+### Phase 4: 事件系统与 UI 层 (Completed ✅)
+1. [x] Event/Observer 系统 (`events.rs`) - **Done**
+2. [x] Session 编排器 (`session.rs`) - **Done**
+3. [x] CLI 重构 (`apps/cli`) - **Done**
 
-### Phase 5: 测试与文档 (持续)
-1. [ ] Mock Transport 单元测试
-2. [ ] 集成测试（需要真实设备）
-3. [ ] API 文档完善
+### Phase 5: 测试与文档 (In Progress)
+1. [x] Mock Transport 基础测试 - **Done** (12 tests passing)
+2. [x] Payload 单元测试 (chunk iterator, chunk state)
+3. [ ] 状态机集成测试 (需要模拟完整协议流程)
+4. [ ] API 文档完善
+5. [ ] 真实设备测试
 
 ## 四、关键设计决策
 

@@ -29,6 +29,7 @@
 //! ```
 
 pub mod events;
+pub mod payload;
 pub mod protocol;
 pub mod session;
 pub mod state;
@@ -36,6 +37,7 @@ pub mod transport;
 
 // Re-exports for convenience
 pub use events::{DnxEvent, DnxObserver, DnxPhase, LogLevel, TracingObserver};
+pub use payload::{ChunkState, FirmwareImage, OsChunkState, OsImage};
 pub use protocol::AckCode;
 pub use session::{DnxSession, SessionConfig};
 pub use transport::{MockTransport, NusbTransport, TransportError, UsbTransport};

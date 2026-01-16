@@ -39,20 +39,20 @@ impl AckCode {
     /// Create ACK from a u64 constant (variable length).
     /// Determines length by counting significant bytes.
     pub const fn from_u64(v: u64) -> Self {
-        // Count significant bytes
-        let len = if v > 0x00FFFFFFFFFFFF {
+        // Count significant bytes by checking highest set byte
+        let len = if v > 0x00FF_FFFF_FFFF_FFFF {
             8
-        } else if v > 0x0000FFFFFFFFFF {
+        } else if v > 0x0000_FFFF_FFFF_FFFF {
             7
-        } else if v > 0x000000FFFFFFFF {
+        } else if v > 0x0000_00FF_FFFF_FFFF {
             6
-        } else if v > 0x00000000FFFFFF {
+        } else if v > 0x0000_0000_FFFF_FFFF {
             5
-        } else if v > 0x0000000000FFFF {
+        } else if v > 0x0000_0000_00FF_FFFF {
             4
-        } else if v > 0x000000000000FF {
+        } else if v > 0x0000_0000_0000_FFFF {
             3
-        } else if v > 0x00000000000000 {
+        } else if v > 0x0000_0000_0000_00FF {
             2
         } else {
             1
