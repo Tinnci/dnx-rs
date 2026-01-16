@@ -76,6 +76,12 @@ pub fn handle_ack<T: UsbTransport, O: DnxObserver>(
     if ack.matches_u64(BULK_ACK_READY_UPH_SIZE) {
         return handle_ruphs(ctx);
     }
+    if ack.matches_u64(BULK_ACK_DCFI00) {
+        return handle_dcfi00(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_DIFWI) {
+        return handle_difwi(ctx);
+    }
     if ack.matches_u64(BULK_ACK_GPP_RESET) {
         return handle_reset(ctx);
     }
@@ -197,6 +203,147 @@ fn handle_dxxm<T: UsbTransport, O: DnxObserver>(
         from: crate::events::DnxPhase::Handshake,
         to: crate::events::DnxPhase::FirmwareDownload,
     });
+
+    // Critical fix for Non-Virgin devices (like Z3580 Moorefield):
+    // Based on xFSTK's EmmcFW::InitDnxHdr logic, the device expects a dynamic 24-byte header:
+    // [0..4]   - File Size (u32 LE)
+    // [4..8]   - GP Flags (u32 LE)
+    // [8..20]  - Reserved (3x u32 LE, all 0)
+    // [20..24] - Checksum (u32 LE) = File Size ^ GP Flags
+    if let Some(dnx_data) = ctx.fw_dnx_data {
+        let file_size = dnx_data.len() as u32;
+        let gp_flags = ctx.state.gp_flags;
+        let checksum = file_size ^ gp_flags;
+
+        let mut header = [0u8; 24];
+        header[0..4].copy_from_slice(&file_size.to_le_bytes());
+        header[4..8].copy_from_slice(&gp_flags.to_le_bytes());
+        // 8..12, 12..16, 16..20 are 0 (already zeroed by initiation)
+        header[20..24].copy_from_slice(&checksum.to_le_bytes());
+
+        info!(
+            "DxxM: Sending dynamic DnX header (Size: {}, GP: 0x{:08X}, CS: 0x{:08X})",
+            file_size, gp_flags, checksum
+        );
+        ctx.transport.write(&header)?;
+    } else {
+        warn!("DxxM: No FW DnX data available to construct header!");
+    }
+
+    Ok(HandleResult::Continue)
+}
+
+/// DCFI00 - Download Chaabi Firmware Image.
+fn handle_dcfi00<T: UsbTransport, O: DnxObserver>(
+    ctx: &mut HandlerContext<'_, T, O>,
+) -> Result<HandleResult> {
+    info!("DCFI00: Device requested Chaabi Firmware");
+    ctx.log(LogLevel::Info, "Device requested Chaabi FW (DCFI00)");
+
+    if let Some(dnx_data) = ctx.fw_dnx_data {
+        // Refactored to get range first, then slice
+        if let Some((start, end)) = find_chaabi_range(dnx_data) {
+            let chaabi_data = &dnx_data[start..end];
+            info!("Found Chaabi FW section: {} bytes", chaabi_data.len());
+            ctx.log(
+                LogLevel::Info,
+                format!("Sending Chaabi FW: {} bytes", chaabi_data.len()),
+            );
+            ctx.transport.write(chaabi_data)?;
+            ctx.emit(DnxEvent::Progress {
+                phase: crate::events::DnxPhase::FirmwareDownload,
+                operation: "Chaabi FW".to_string(),
+                current: chaabi_data.len() as u64,
+                total: chaabi_data.len() as u64,
+            });
+            debug!("Sent Chaabi FW");
+
+            // Prepare IFWI state for next phase
+            // IFWI is assumed to be everything BEFORE Chaabi.
+            // Start at 0, Length = start (of Chaabi)
+            // But we must check if there's a header we should skip?
+            // User says IFWI is usually in the first half.
+            // We'll use 0..start as IFWI data.
+            let ifwi_len = start;
+            ctx.state.ifwi_state =
+                crate::payload::ChunkState::new(ifwi_len, crate::protocol::constants::ONE28_K);
+            info!(
+                "Prepared IFWI state: size={} chunks={}",
+                ifwi_len, ctx.state.ifwi_state.total
+            );
+        } else {
+            let msg = "Failed to find Chaabi (CHFI) section in firmware file!";
+            warn!("{}", msg);
+            ctx.log(LogLevel::Error, msg);
+            // Returning Error to stop the process as this is critical
+            return Ok(HandleResult::Error(msg.to_string()));
+        }
+    } else {
+        warn!("DCFI00: No FW data available!");
+        ctx.log(LogLevel::Warn, "No FW data available for DCFI00");
+    }
+
+    Ok(HandleResult::Continue)
+}
+
+/// DIFWI - Download Integrated Firmware Image.
+fn handle_difwi<T: UsbTransport, O: DnxObserver>(
+    ctx: &mut HandlerContext<'_, T, O>,
+) -> Result<HandleResult> {
+    debug!("DIFWI: Device requested IFWI chunk");
+
+    // We assume IFWI data corresponds to 0..chaabi_start in the dnx_fwr.bin
+    // This state should have been initialized in handle_dcfi00 success path.
+    // If not, we try to initialize it here or fail.
+
+    if ctx.state.ifwi_state.total == 0 {
+        // Not initialized? Try to find boundaries again.
+        if let Some(dnx_data) = ctx.fw_dnx_data {
+            if let Some((start, _)) = find_chaabi_range(dnx_data) {
+                let ifwi_len = start;
+                ctx.state.ifwi_state =
+                    crate::payload::ChunkState::new(ifwi_len, crate::protocol::constants::ONE28_K);
+            }
+        }
+    }
+
+    if let Some(dnx_data) = ctx.fw_dnx_data {
+        // IFWI data is [0 .. ifwi_state.total_size]
+        // But ChunkState doesn't store total_size directly in a way we can slice original data easily
+        // Wait, ChunkState stores total (chunks). Not bytes.
+        // Actually ChunkState stores: current (chunk index), total (chunks).
+        // It does NOT store the data source offset.
+        // We typically use the `next_chunk` method which slices the input buffer based on internal state.
+
+        // However, `next_chunk` expects the *specific payload/buffer* as input.
+        // If IFWI is a slice of dnx_data, we need that slice.
+        // Re-calculate the range or store it?
+
+        // Efficient way: re-find range (it's fast)
+        if let Some((chaabi_start, _)) = find_chaabi_range(dnx_data) {
+            let ifwi_data = &dnx_data[0..chaabi_start];
+
+            if let Some(chunk) = ctx.state.ifwi_state.next_chunk(ifwi_data) {
+                ctx.transport.write(chunk)?;
+                ctx.emit(DnxEvent::Progress {
+                    phase: crate::events::DnxPhase::FirmwareDownload,
+                    operation: "IFWI".to_string(),
+                    current: ctx.state.ifwi_state.current as u64,
+                    total: ctx.state.ifwi_state.total as u64,
+                });
+                info!(
+                    "Sent IFWI chunk {}/{}: {} bytes",
+                    ctx.state.ifwi_state.current,
+                    ctx.state.ifwi_state.total,
+                    chunk.len()
+                );
+            } else {
+                warn!("DIFWI: No more chunks to send (or completed)");
+            }
+        } else {
+            warn!("DIFWI: Could not determine IFWI range");
+        }
+    }
 
     Ok(HandleResult::Continue)
 }
@@ -580,4 +727,56 @@ fn handle_done<T: UsbTransport, O: DnxObserver>(
     ctx.state.os_done = true;
     ctx.emit(DnxEvent::Complete);
     Ok(HandleResult::Complete)
+}
+
+/// Helper to find Chaabi range in DnX binary.
+/// Returns (start, end) offsets.
+fn find_chaabi_range(data: &[u8]) -> Option<(usize, usize)> {
+    // Search for "CH00" (start marker) and "CDPH" (end marker)
+    let ch00_magic = b"CH00";
+    let cdph_magic = b"CDPH";
+    let dtkn_magic = b"DTKN"; // Optional token start
+
+    // Helper to find subsequence
+    let find = |needle: &[u8]| -> Option<usize> {
+        data.windows(needle.len())
+            .position(|window| window == needle)
+    };
+
+    let ch00_pos = find(ch00_magic)?;
+    let cdph_pos = find(cdph_magic)?;
+
+    // Start calculation:
+    // Basic start is CH00 - 0x80
+    // But check for DTKN (CHAABI Token) which might precede it
+    let mut start = ch00_pos.checked_sub(0x80)?;
+
+    // Check if DTKN exists and is within reasonable range before CH00
+    // (e.g., within 4KB before CH00, and definitely after start-0x1000 or similar?)
+    // Actually, xFSTK just searches for DTKN. If found, it uses it.
+    // Let's restrict DTKN search to be *before* CH00.
+    if let Some(dtkn_pos) = data[..ch00_pos]
+        .windows(dtkn_magic.len())
+        .position(|w| w == dtkn_magic)
+    {
+        // Only use DTKN if it's "close enough" or just use it?
+        // User logic: "m_chaabi_token_size = CH00 - DTKN".
+        // This implies DTKN is the start.
+        start = dtkn_pos;
+    }
+
+    // End calculation: CDPH + 24 bytes (CDPH header size)
+    let end = cdph_pos + 24;
+
+    if start < end && end <= data.len() {
+        return Some((start, end));
+    }
+    None
+}
+
+/// [DEPRECATED] Wrapper for extract_chaabi_payload for backward compatibility if needed,
+/// but better to use range finder.
+#[allow(dead_code)]
+fn extract_chaabi_payload(data: &[u8]) -> Option<&[u8]> {
+    find_chaabi_range(data).map(|(start, end)| &data[start..end])
 }

@@ -133,6 +133,9 @@ pub struct StateMachineContext {
     /// ROM Patch chunk state.
     pub rom_patch_state: crate::payload::ChunkState,
 
+    /// IFWI chunk state (manual tracker for DIFWI).
+    pub ifwi_state: crate::payload::ChunkState,
+
     // OS chunk state
     /// OS image chunk state.
     pub os_image_state: crate::payload::OsChunkState,

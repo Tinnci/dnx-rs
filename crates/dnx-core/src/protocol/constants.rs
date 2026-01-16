@@ -134,6 +134,12 @@ pub const BULK_ACK_IFW3: u32 = 0x49465703; // 'IFW\x03'
 /// HLT0 - FW file has no size
 pub const BULK_ACK_HLT0: u32 = 0x484C5430; // 'HLT0'
 
+/// Download Chaabi FW Image - Security Firmware
+pub const BULK_ACK_DCFI00: u64 = 0x444346493030; // 'DCFI00'
+
+/// Download Integrated Firmware Image (IFWI)
+pub const BULK_ACK_DIFWI: u64 = 0x4449465749; // 'DIFWI'
+
 // ============================================================================
 // OS Recovery ACK Codes
 // ============================================================================

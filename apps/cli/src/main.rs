@@ -137,12 +137,12 @@ fn main() {
             "eaglespeak" => {
                 fw_dnx = fw_dnx.or(Some("assets/firmware/eaglespeak/dnx_fwr.bin".to_string()));
                 os_image = os_image.or(Some("assets/firmware/eaglespeak/dnx_osr.img".to_string()));
-                info!("Using profile: eaglespeak (Asus Z3580)");
+                info!("Using profile: eaglespeak (Atom Z3580)");
             }
             "blackburn" => {
                 fw_dnx = fw_dnx.or(Some("assets/firmware/blackburn/dnx_fwr.bin".to_string()));
                 os_image = os_image.or(Some("assets/firmware/blackburn/dnx_osr.img".to_string()));
-                info!("Using profile: blackburn (Dell Z3530)");
+                info!("Using profile: blackburn (Atom Z3530)");
             }
             _ => {
                 error!("Unknown profile: {}", profile);
