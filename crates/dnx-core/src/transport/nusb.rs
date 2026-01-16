@@ -172,6 +172,12 @@ impl UsbTransport for NusbTransport {
         if bytes.is_empty() {
             return Err(TransportError::ReadFailed("Empty ACK response".into()));
         }
+        // Debug: print raw ACK bytes
+        debug!(
+            raw_bytes = ?bytes.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" "),
+            ascii = ?String::from_utf8_lossy(&bytes),
+            "Raw ACK received"
+        );
         Ok(AckCode::from_bytes(&bytes))
     }
 

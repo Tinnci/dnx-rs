@@ -241,36 +241,34 @@ fn handle_dcfi00<T: UsbTransport, O: DnxObserver>(
     ctx.log(LogLevel::Info, "Device requested Chaabi FW (DCFI00)");
 
     if let Some(dnx_data) = ctx.fw_dnx_data {
-        // Refactored to get range first, then slice
-        if let Some((start, end)) = find_chaabi_range(dnx_data) {
-            let chaabi_data = &dnx_data[start..end];
-            info!("Found Chaabi FW section: {} bytes", chaabi_data.len());
+        // Use build_chaabi_payload which constructs: [CDPH Header] + [Token + FW]
+        if let Some(chaabi_payload) = build_chaabi_payload(dnx_data) {
+            info!("Built Chaabi FW payload: {} bytes", chaabi_payload.len());
             ctx.log(
                 LogLevel::Info,
-                format!("Sending Chaabi FW: {} bytes", chaabi_data.len()),
+                format!("Sending Chaabi FW: {} bytes", chaabi_payload.len()),
             );
-            ctx.transport.write(chaabi_data)?;
+            ctx.transport.write(&chaabi_payload)?;
             ctx.emit(DnxEvent::Progress {
                 phase: crate::events::DnxPhase::FirmwareDownload,
                 operation: "Chaabi FW".to_string(),
-                current: chaabi_data.len() as u64,
-                total: chaabi_data.len() as u64,
+                current: chaabi_payload.len() as u64,
+                total: chaabi_payload.len() as u64,
             });
             debug!("Sent Chaabi FW");
 
             // Prepare IFWI state for next phase
-            // IFWI is assumed to be everything BEFORE Chaabi.
-            // Start at 0, Length = start (of Chaabi)
-            // But we must check if there's a header we should skip?
-            // User says IFWI is usually in the first half.
-            // We'll use 0..start as IFWI data.
-            let ifwi_len = start;
-            ctx.state.ifwi_state =
-                crate::payload::ChunkState::new(ifwi_len, crate::protocol::constants::ONE28_K);
-            info!(
-                "Prepared IFWI state: size={} chunks={}",
-                ifwi_len, ctx.state.ifwi_state.total
-            );
+            // IFWI is everything BEFORE the Token+FW section.
+            // Use find_chaabi_range to get the start offset.
+            if let Some((chaabi_start, _)) = find_chaabi_range(dnx_data) {
+                let ifwi_len = chaabi_start;
+                ctx.state.ifwi_state =
+                    crate::payload::ChunkState::new(ifwi_len, crate::protocol::constants::ONE28_K);
+                info!(
+                    "Prepared IFWI state: size={} chunks={}",
+                    ifwi_len, ctx.state.ifwi_state.total
+                );
+            }
         } else {
             let msg = "Failed to find Chaabi (CHFI) section in firmware file!";
             warn!("{}", msg);
@@ -730,14 +728,12 @@ fn handle_done<T: UsbTransport, O: DnxObserver>(
 }
 
 /// Helper to find Chaabi range in DnX binary.
-/// Returns (start, end) offsets.
+/// Returns (start, end) offsets for the Token+FW section (NOT including CDPH).
 fn find_chaabi_range(data: &[u8]) -> Option<(usize, usize)> {
-    // Search for "CH00" (start marker) and "CDPH" (end marker)
     let ch00_magic = b"CH00";
     let cdph_magic = b"CDPH";
-    let dtkn_magic = b"DTKN"; // Optional token start
+    let dtkn_magic = b"DTKN";
 
-    // Helper to find subsequence
     let find = |needle: &[u8]| -> Option<usize> {
         data.windows(needle.len())
             .position(|window| window == needle)
@@ -746,37 +742,68 @@ fn find_chaabi_range(data: &[u8]) -> Option<(usize, usize)> {
     let ch00_pos = find(ch00_magic)?;
     let cdph_pos = find(cdph_magic)?;
 
-    // Start calculation:
-    // Basic start is CH00 - 0x80
-    // But check for DTKN (CHAABI Token) which might precede it
+    // Token+FW start: CH00 - 0x80, or DTKN if found
     let mut start = ch00_pos.checked_sub(0x80)?;
-
-    // Check if DTKN exists and is within reasonable range before CH00
-    // (e.g., within 4KB before CH00, and definitely after start-0x1000 or similar?)
-    // Actually, xFSTK just searches for DTKN. If found, it uses it.
-    // Let's restrict DTKN search to be *before* CH00.
     if let Some(dtkn_pos) = data[..ch00_pos]
         .windows(dtkn_magic.len())
         .position(|w| w == dtkn_magic)
     {
-        // Only use DTKN if it's "close enough" or just use it?
-        // User logic: "m_chaabi_token_size = CH00 - DTKN".
-        // This implies DTKN is the start.
         start = dtkn_pos;
     }
 
-    // End calculation: CDPH + 24 bytes (CDPH header size)
-    let end = cdph_pos + 24;
+    // Token+FW end: CDPH position (CDPH is separate)
+    let end = cdph_pos;
 
     if start < end && end <= data.len() {
-        return Some((start, end));
+        Some((start, end))
+    } else {
+        None
     }
-    None
 }
 
-/// [DEPRECATED] Wrapper for extract_chaabi_payload for backward compatibility if needed,
-/// but better to use range finder.
-#[allow(dead_code)]
-fn extract_chaabi_payload(data: &[u8]) -> Option<&[u8]> {
-    find_chaabi_range(data).map(|(start, end)| &data[start..end])
+/// Build Chaabi payload with correct structure for device.
+/// According to xFSTK's InitDnx(), the structure is:
+/// [CDPH Header (24 bytes from FILE END)] + [Token + FW data]
+///
+/// The CDPH is read from the LAST 24 bytes of the file, NOT from the "CDPH" string location!
+fn build_chaabi_payload(data: &[u8]) -> Option<Vec<u8>> {
+    let ch00_magic = b"CH00";
+    let cdph_magic = b"CDPH";
+    let dtkn_magic = b"DTKN";
+
+    let find = |needle: &[u8]| -> Option<usize> {
+        data.windows(needle.len())
+            .position(|window| window == needle)
+    };
+
+    let ch00_pos = find(ch00_magic)?;
+    let cdph_pos = find(cdph_magic)?;
+    let file_size = data.len();
+
+    // Token+FW start: CH00 - 0x80, or DTKN if found
+    let mut token_fw_start = ch00_pos.checked_sub(0x80)?;
+    if let Some(dtkn_pos) = data[..ch00_pos]
+        .windows(dtkn_magic.len())
+        .position(|w| w == dtkn_magic)
+    {
+        token_fw_start = dtkn_pos;
+    }
+
+    // Token+FW end: CDPH string position (not including CDPH itself)
+    let token_fw_end = cdph_pos;
+
+    // CDPH header: LAST 24 bytes of the FILE (not from CDPH string position!)
+    // This matches xFSTK's: fseek(fp, (size - CDPH_HEADER_SIZE), SEEK_SET)
+    if file_size < 24 {
+        return None;
+    }
+    let cdph_header = &data[file_size - 24..file_size];
+    let token_fw_data = &data[token_fw_start..token_fw_end];
+
+    // Build: CDPH first (from file end), then Token+FW
+    let mut payload = Vec::with_capacity(24 + token_fw_data.len());
+    payload.extend_from_slice(cdph_header);
+    payload.extend_from_slice(token_fw_data);
+
+    Some(payload)
 }
