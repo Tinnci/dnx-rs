@@ -1,0 +1,18 @@
+[package]
+name = "dnx-tui"
+version = "0.1.0"
+edition = "2024"
+description = "Terminal UI for Intel DnX Protocol Tool"
+
+[[bin]]
+name = "dnx-tui"
+path = "src/main.rs"
+
+[dependencies]
+dnx-core = { path = "../../crates/dnx-core" }
+ratatui = "0.29"
+crossterm = "0.28"
+chrono = "0.4"
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
