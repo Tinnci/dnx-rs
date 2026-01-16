@@ -41,6 +41,10 @@ struct Args {
     #[arg(long)]
     ifwi_wipe: bool,
 
+    /// Hardware profile to use (e.g., 'eaglespeak', 'blackburn')
+    #[arg(short, long)]
+    profile: Option<String>,
+
     /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
@@ -125,11 +129,37 @@ fn main() {
 
     info!("DnX-rs Tool starting...");
 
+    let mut fw_dnx = args.fw_dnx;
+    let mut os_image = args.os_image;
+
+    if let Some(profile) = &args.profile {
+        match profile.as_str() {
+            "eaglespeak" => {
+                fw_dnx = fw_dnx.or(Some("assets/firmware/eaglespeak/dnx_fwr.bin".to_string()));
+                os_image = os_image.or(Some("assets/firmware/eaglespeak/dnx_osr.img".to_string()));
+                info!("Using profile: eaglespeak (Asus Z3580)");
+            }
+            "blackburn" => {
+                fw_dnx = fw_dnx.or(Some("assets/firmware/blackburn/dnx_fwr.bin".to_string()));
+                os_image = os_image.or(Some("assets/firmware/blackburn/dnx_osr.img".to_string()));
+                info!("Using profile: blackburn (Dell Z3530)");
+            }
+            _ => {
+                error!("Unknown profile: {}", profile);
+                eprintln!(
+                    "✗ Error: Unknown profile '{}'. Available: eaglespeak, blackburn",
+                    profile
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
     let config = SessionConfig {
-        fw_dnx_path: args.fw_dnx,
+        fw_dnx_path: fw_dnx,
         fw_image_path: args.fw_image,
         os_dnx_path: args.os_dnx,
-        os_image_path: args.os_image,
+        os_image_path: os_image,
         misc_dnx_path: args.misc_dnx,
         gp_flags: args.gp_flags,
         ifwi_wipe_enable: args.ifwi_wipe,
