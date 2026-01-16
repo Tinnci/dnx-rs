@@ -94,22 +94,39 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         // Load files
         self.load_files()?;
 
-        // Emit starting event
-        self.observer.on_event(&DnxEvent::PhaseChanged {
-            from: DnxPhase::WaitingForDevice,
-            to: DnxPhase::WaitingForDevice,
-        });
+        let mut state = StateMachineContext::new();
+        state.gp_flags = self.config.gp_flags;
+        state.ifwi_wipe_enable = self.config.ifwi_wipe_enable;
 
-        // Wait for device
-        let transport = self.wait_for_device()?;
+        loop {
+            // Emit starting event
+            self.observer.on_event(&DnxEvent::PhaseChanged {
+                from: DnxPhase::WaitingForDevice,
+                to: DnxPhase::WaitingForDevice,
+            });
 
-        self.observer.on_event(&DnxEvent::DeviceConnected {
-            vid: transport.vendor_id(),
-            pid: transport.product_id(),
-        });
+            // Wait for device
+            let transport = self.wait_for_device()?;
 
-        // Run state machine
-        self.run_state_machine(&transport)?;
+            self.observer.on_event(&DnxEvent::DeviceConnected {
+                vid: transport.vendor_id(),
+                pid: transport.product_id(),
+            });
+
+            // Run state machine
+            let result = self.run_state_machine(&transport, &mut state);
+
+            match result {
+                Ok(HandleResult::Complete) => break,
+                Ok(HandleResult::NeedReEnumerate) => {
+                    info!("Device resetting, waiting for re-enumeration...");
+                    thread::sleep(Duration::from_secs(2)); // Wait for device to actually disconnect
+                    continue; // Loop back to wait_for_device
+                }
+                Ok(_) => break, // Other results end the session normally
+                Err(e) => return Err(e),
+            }
+        }
 
         Ok(())
     }
@@ -148,19 +165,35 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         }
     }
 
-    fn run_state_machine(&self, transport: &NusbTransport) -> Result<()> {
-        let mut state = StateMachineContext::new();
-        state.gp_flags = self.config.gp_flags;
-        state.ifwi_wipe_enable = self.config.ifwi_wipe_enable;
+    fn run_state_machine(
+        &self,
+        transport: &NusbTransport,
+        state: &mut StateMachineContext,
+    ) -> Result<HandleResult> {
+        // Send initial preamble only if we are starting fresh or after a reset that returns to DnX mode
+        if !state.gpp_reset {
+            self.observer.on_event(&DnxEvent::PhaseChanged {
+                from: DnxPhase::WaitingForDevice,
+                to: DnxPhase::Handshake,
+            });
 
-        // Send initial preamble
-        self.observer.on_event(&DnxEvent::PhaseChanged {
-            from: DnxPhase::WaitingForDevice,
-            to: DnxPhase::Handshake,
-        });
+            transport.write(&PREAMBLE_DNER.to_le_bytes())?;
+            info!(preamble = "DnER", "Sent preamble");
 
-        transport.write(&PREAMBLE_DNER.to_le_bytes())?;
-        info!(preamble = "DnER", "Sent preamble");
+            // Moorefield devices (0A2C, 0A65) often need IDRQ after DnER
+            let pid = transport.product_id();
+            if pid == crate::protocol::constants::MOOREFIELD_PRODUCT_ID
+                || pid == crate::protocol::constants::MOOREFIELD_ALT_PID
+            {
+                thread::sleep(Duration::from_millis(50));
+                transport.write(&crate::protocol::constants::PREAMBLE_IDRQ.to_le_bytes())?;
+                info!(preamble = "IDRQ", "Sent IDRQ preamble for Moorefield");
+            }
+        } else {
+            // After reset, we might just wait for the first ACK from the new stage
+            info!("Resuming state machine after reset");
+            state.gpp_reset = false;
+        }
 
         // Main loop
         loop {
@@ -172,8 +205,7 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                 Err(TransportError::Disconnected) => {
                     self.observer.on_event(&DnxEvent::DeviceDisconnected);
                     warn!("Device disconnected");
-                    // TODO: Handle re-enumeration
-                    return Err(anyhow!("Device disconnected"));
+                    return Ok(HandleResult::NeedReEnumerate);
                 }
                 Err(e) => {
                     warn!(error = ?e, "Read error");
@@ -185,7 +217,7 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
             let mut ctx = HandlerContext {
                 transport,
                 observer: self.observer.as_ref(),
-                state: &mut state,
+                state,
                 fw_dnx_data: self.fw_dnx_data.as_deref(),
                 fw_image: self.fw_image.as_ref(),
                 os_dnx_data: self.os_dnx_data.as_deref(),
@@ -210,7 +242,7 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                 }
                 HandleResult::Complete => {
                     self.observer.on_event(&DnxEvent::Complete);
-                    return Ok(());
+                    return Ok(HandleResult::Complete);
                 }
                 HandleResult::Error(msg) => {
                     return Err(anyhow!(msg));
@@ -220,9 +252,8 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                         from: DnxPhase::FirmwareDownload,
                         to: DnxPhase::DeviceReset,
                     });
-                    // TODO: Implement re-enumeration logic
                     self.observer.on_event(&DnxEvent::DeviceDisconnected);
-                    return Err(anyhow!("Device reset - re-enumeration not implemented"));
+                    return Ok(HandleResult::NeedReEnumerate);
                 }
             }
 
@@ -231,6 +262,6 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
             }
         }
 
-        Ok(())
+        Ok(HandleResult::Complete)
     }
 }

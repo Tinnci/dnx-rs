@@ -5,7 +5,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span, Text},
     widgets::{Block, Borders, Gauge, List, ListItem, Padding, Paragraph, Tabs, Wrap},
@@ -80,7 +80,6 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
             format!(" ● {:04X}:{:04X} ", vid, pid),
             Style::default().fg(Color::Green),
         ),
-        DeviceStatus::Busy => Span::styled(" ◐ Busy ", Style::default().fg(Color::Yellow)),
     };
 
     let phase = Span::styled(format!(" {} ", app.phase), Style::default().fg(Color::Cyan));

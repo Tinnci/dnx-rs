@@ -72,6 +72,31 @@ pub fn handle_ack<T: UsbTransport, O: DnxObserver>(
         return Ok(HandleResult::Error(msg));
     }
 
+    // Match 5+ byte ACKs first (to avoid prefix collisions with 4-byte ones)
+    if ack.matches_u64(BULK_ACK_READY_UPH_SIZE) {
+        return handle_ruphs(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_GPP_RESET) {
+        return handle_reset(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_PSFW1) {
+        return handle_psfw1(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_PSFW2) {
+        return handle_psfw2(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_VEDFW) {
+        return handle_vedfw(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_ROSIP) {
+        return handle_rosip(ctx);
+    }
+    if ack.matches_u64(BULK_ACK_OSIPSZ) {
+        // Just log it for now
+        ctx.log(LogLevel::Debug, "Received OSIP Sz request");
+        return Ok(HandleResult::Continue);
+    }
+
     // Match 4-byte ACKs
     if ack.matches_u32(BULK_ACK_DFRM) {
         return handle_dfrm(ctx);
@@ -116,26 +141,6 @@ pub fn handle_ack<T: UsbTransport, O: DnxObserver>(
         return handle_eoiu(ctx);
     }
 
-    // Match 5+ byte ACKs
-    if ack.matches_u64(BULK_ACK_READY_UPH_SIZE) {
-        return handle_ruphs(ctx);
-    }
-    if ack.matches_u64(BULK_ACK_GPP_RESET) {
-        return handle_reset(ctx);
-    }
-    if ack.matches_u64(BULK_ACK_PSFW1) {
-        return handle_psfw1(ctx);
-    }
-    if ack.matches_u64(BULK_ACK_PSFW2) {
-        return handle_psfw2(ctx);
-    }
-    if ack.matches_u64(BULK_ACK_VEDFW) {
-        return handle_vedfw(ctx);
-    }
-    if ack.matches_u64(BULK_ACK_ROSIP) {
-        return handle_rosip(ctx);
-    }
-
     // Unknown ACK
     warn!(ack = %ack.as_ascii(), "Unhandled ACK code");
     ctx.log(LogLevel::Warn, format!("Unhandled ACK: {}", ack.as_ascii()));
@@ -163,6 +168,10 @@ fn handle_dfrm<T: UsbTransport, O: DnxObserver>(
         return Ok(HandleResult::FwDone);
     }
 
+    ctx.emit(DnxEvent::PhaseChanged {
+        from: crate::events::DnxPhase::Handshake,
+        to: crate::events::DnxPhase::FirmwareDownload,
+    });
     ctx.state.goto_state(DldrState::FwNormal);
     Ok(HandleResult::Continue)
 }
@@ -183,6 +192,11 @@ fn handle_dxxm<T: UsbTransport, O: DnxObserver>(
     } else {
         ctx.state.goto_state(DldrState::FwNormal);
     }
+
+    ctx.emit(DnxEvent::PhaseChanged {
+        from: crate::events::DnxPhase::Handshake,
+        to: crate::events::DnxPhase::FirmwareDownload,
+    });
 
     Ok(HandleResult::Continue)
 }

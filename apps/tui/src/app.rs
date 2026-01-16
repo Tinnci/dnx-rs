@@ -71,7 +71,6 @@ pub enum Tab {
 pub enum DeviceStatus {
     Disconnected,
     Connected { vid: u16, pid: u16 },
-    Busy,
 }
 
 /// Log entry.
@@ -272,6 +271,18 @@ impl App {
 
     fn start_operation(&mut self) {
         if self.is_running {
+            return;
+        }
+
+        if self.fw_dnx_path.is_empty()
+            && self.fw_image_path.is_empty()
+            && self.os_dnx_path.is_empty()
+            && self.os_image_path.is_empty()
+        {
+            self.add_log(
+                LogLevel::Error,
+                "No files selected! Please enter file paths.",
+            );
             return;
         }
 

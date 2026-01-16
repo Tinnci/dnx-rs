@@ -93,7 +93,12 @@ impl AckCode {
 
     /// Check if this matches a u32 constant (common 4-byte ACKs).
     pub fn matches_u32(&self, expected: u32) -> bool {
-        self.len >= 4 && (self.value & 0xFFFFFFFF) == expected as u64
+        if self.len < 4 {
+            return false;
+        }
+        // Check the first 4 bytes (prefix)
+        let shift = (self.len - 4) * 8;
+        ((self.value >> shift) & 0xFFFFFFFF) == expected as u64
     }
 
     /// Check if this matches a u64 constant (5+ byte ACKs like RUPHS, PSFW1).
