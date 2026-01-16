@@ -163,8 +163,9 @@ fn draw_config_panel(frame: &mut Frame, area: Rect, app: &App) {
             Style::default().fg(Color::White)
         };
 
-        let display_value = if value.is_empty() {
-            "(not set)".to_string()
+        let input_area_width = fields_layout[i].width as usize - 2; // -2 for borders
+        let display_value = if value.len() > input_area_width {
+            format!("...{}", &value[value.len() - (input_area_width - 3)..])
         } else {
             value.to_string()
         };
@@ -174,7 +175,7 @@ fn draw_config_panel(frame: &mut Frame, area: Rect, app: &App) {
         let input =
             Paragraph::new(Line::from(vec![
                 Span::styled(*label, Style::default().fg(Color::Cyan)),
-                Span::styled(&display_value, style),
+                Span::styled(display_value, style),
                 Span::styled(cursor, Style::default().fg(Color::Yellow)),
             ]))
             .block(Block::default().borders(Borders::BOTTOM).border_style(
@@ -267,7 +268,7 @@ fn draw_recent_logs(frame: &mut Frame, area: Rect, app: &App) {
         .iter()
         .rev()
         .take(area.height.saturating_sub(2) as usize)
-        .map(log_to_list_item)
+        .map(|entry| log_to_list_item(entry, area.width))
         .collect();
 
     let list = List::new(items)
@@ -288,7 +289,7 @@ fn draw_logs_view(frame: &mut Frame, area: Rect, app: &App) {
         .iter()
         .skip(app.log_scroll)
         .take(area.height.saturating_sub(2) as usize)
-        .map(log_to_list_item)
+        .map(|entry| log_to_list_item(entry, area.width))
         .collect();
 
     let list = List::new(items)
@@ -351,7 +352,7 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
     frame.render_widget(help, area);
 }
 
-fn log_to_list_item(entry: &LogEntry) -> ListItem<'static> {
+fn log_to_list_item(entry: &LogEntry, width: u16) -> ListItem<'static> {
     let (icon, color) = match entry.level {
         LogLevel::Error => ("✗", Color::Red),
         LogLevel::Warn => ("⚠", Color::Yellow),
@@ -360,14 +361,46 @@ fn log_to_list_item(entry: &LogEntry) -> ListItem<'static> {
         LogLevel::Trace => ("·", Color::DarkGray),
     };
 
-    let line = Line::from(vec![
-        Span::styled(
-            format!("{} ", entry.timestamp),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(format!("{} ", icon), Style::default().fg(color)),
-        Span::styled(entry.message.clone(), Style::default().fg(Color::White)),
-    ]);
+    let time_len = entry.timestamp.len() + 1; // +1 for space
+    let icon_len = 2; // 1 char + 1 space
 
-    ListItem::new(line)
+    // Calculate available width for message
+    let msg_width = width.saturating_sub((time_len + icon_len + 4) as u16) as usize; // Extra padding
+
+    // Simple wrapping
+    let message = &entry.message;
+    let mut lines = Vec::new();
+
+    if message.len() <= msg_width {
+        ListItem::new(Line::from(vec![
+            Span::styled(
+                format!("{} ", entry.timestamp),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(format!("{} ", icon), Style::default().fg(color)),
+            Span::styled(message.clone(), Style::default().fg(Color::White)),
+        ]))
+    } else {
+        // First line
+        let (first, rest) = message.split_at(std::cmp::min(message.len(), msg_width));
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{} ", entry.timestamp),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(format!("{} ", icon), Style::default().fg(color)),
+            Span::styled(first.to_string(), Style::default().fg(Color::White)),
+        ]));
+
+        // Subsequent lines
+        let chars: Vec<char> = rest.chars().collect();
+        for chunk in chars.chunks(msg_width) {
+            let s: String = chunk.iter().collect();
+            lines.push(Line::from(vec![
+                Span::raw(" ".repeat(time_len + icon_len)), // Indent
+                Span::styled(s, Style::default().fg(Color::White)),
+            ]));
+        }
+        ListItem::new(Text::from(lines))
+    }
 }
