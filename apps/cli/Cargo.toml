@@ -1,0 +1,15 @@
+[package]
+name = "dnx-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "dnx"
+path = "src/main.rs"
+
+[dependencies]
+dnx-core = { path = "../../crates/dnx-core" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

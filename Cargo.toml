@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "crates/*",
+    "apps/*",
+    "xtask",
+]
+resolver = "2"
+
+[workspace.dependencies]
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+clap = { version = "4.4", features = ["derive"] }
+nusb = "0.2"
+byteorder = "1.4"
