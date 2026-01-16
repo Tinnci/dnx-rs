@@ -765,11 +765,17 @@ fn find_chaabi_range(data: &[u8]) -> Option<(usize, usize)> {
 /// According to xFSTK's InitDnx(), the structure is:
 /// [CDPH Header (24 bytes from FILE END)] + [Token + FW data]
 ///
-/// The CDPH is read from the LAST 24 bytes of the file, NOT from the "CDPH" string location!
+/// Token markers (in order of priority):
+/// - DTKN: TNG B0+ token container (16KB)
+/// - $CHT: TNG A0 token (starts at $CHT - 0x80)
+/// - ChPr: TNG B0/ANN token
+/// - None: fallback to CH00 - 0x80
 fn build_chaabi_payload(data: &[u8]) -> Option<Vec<u8>> {
     let ch00_magic = b"CH00";
     let cdph_magic = b"CDPH";
     let dtkn_magic = b"DTKN";
+    let cht_magic = b"$CHT"; // TNG A0
+    let chpr_magic = b"ChPr"; // TNG B0/ANN
 
     let find = |needle: &[u8]| -> Option<usize> {
         data.windows(needle.len())
@@ -780,25 +786,59 @@ fn build_chaabi_payload(data: &[u8]) -> Option<Vec<u8>> {
     let cdph_pos = find(cdph_magic)?;
     let file_size = data.len();
 
-    // Token+FW start: CH00 - 0x80, or DTKN if found
-    let mut token_fw_start = ch00_pos.checked_sub(0x80)?;
-    if let Some(dtkn_pos) = data[..ch00_pos]
-        .windows(dtkn_magic.len())
-        .position(|w| w == dtkn_magic)
-    {
-        token_fw_start = dtkn_pos;
-    }
+    // Determine Token+FW start position based on available markers
+    // Priority: DTKN > $CHT > ChPr > CH00-0x80
+    let token_fw_start = if let Some(dtkn_pos) = find(dtkn_magic) {
+        // DTKN found - B0+ token container
+        if dtkn_pos < ch00_pos {
+            tracing::info!("Using DTKN marker at 0x{:x} for Token start", dtkn_pos);
+            dtkn_pos
+        } else {
+            ch00_pos.checked_sub(0x80)?
+        }
+    } else if let Some(cht_pos) = find(cht_magic) {
+        // $CHT found - TNG A0 token
+        if cht_pos < ch00_pos {
+            let start = cht_pos.checked_sub(0x80)?;
+            tracing::info!(
+                "Using $CHT marker at 0x{:x}, Token starts at 0x{:x}",
+                cht_pos,
+                start
+            );
+            start
+        } else {
+            ch00_pos.checked_sub(0x80)?
+        }
+    } else if let Some(chpr_pos) = find(chpr_magic) {
+        // ChPr found - TNG B0/ANN token
+        if chpr_pos < ch00_pos {
+            tracing::info!("Using ChPr marker at 0x{:x} for Token start", chpr_pos);
+            chpr_pos
+        } else {
+            ch00_pos.checked_sub(0x80)?
+        }
+    } else {
+        // No token marker found, fallback to CH00 - 0x80
+        tracing::info!("No token marker found, using CH00 - 0x80");
+        ch00_pos.checked_sub(0x80)?
+    };
 
     // Token+FW end: CDPH string position (not including CDPH itself)
     let token_fw_end = cdph_pos;
 
     // CDPH header: LAST 24 bytes of the FILE (not from CDPH string position!)
-    // This matches xFSTK's: fseek(fp, (size - CDPH_HEADER_SIZE), SEEK_SET)
     if file_size < 24 {
         return None;
     }
     let cdph_header = &data[file_size - 24..file_size];
     let token_fw_data = &data[token_fw_start..token_fw_end];
+
+    tracing::info!(
+        "Chaabi payload: Header 24 bytes from file end, Body {} bytes from 0x{:x} to 0x{:x}",
+        token_fw_data.len(),
+        token_fw_start,
+        token_fw_end
+    );
 
     // Build: CDPH first (from file end), then Token+FW
     let mut payload = Vec::with_capacity(24 + token_fw_data.len());
