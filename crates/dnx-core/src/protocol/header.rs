@@ -1,7 +1,7 @@
 //! Data structure headers for DnX protocol.
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Cursor, Write};
+use std::io::Cursor;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

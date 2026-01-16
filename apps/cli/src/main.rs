@@ -1,5 +1,5 @@
 use clap::Parser;
-use dnx_core::events::{DnxEvent, DnxObserver, DnxPhase, LogLevel};
+use dnx_core::events::{DnxEvent, DnxObserver, LogLevel};
 use dnx_core::session::{DnxSession, SessionConfig};
 use std::sync::Arc;
 use tracing::{error, info};

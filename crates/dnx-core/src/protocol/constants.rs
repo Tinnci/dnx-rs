@@ -58,6 +58,7 @@ pub const PREAMBLE_BMRQ: u32 = 0x51524D42; // 'BMRQ'
 pub const BULK_ACK_DFRM: u32 = 0x4446524D; // 'DFRM'
 
 /// Non-virgin part DnX (existing firmware)
+#[allow(non_upper_case_globals)]
 pub const BULK_ACK_DxxM: u32 = 0x4478784D; // 'DxxM'
 
 /// Download Execute Bootloader - Ready for DnX binary
@@ -175,6 +176,7 @@ pub const OPP_OS: u8 = 1;
 pub const DFRM_OPCODE: u16 = 0x1000;
 
 /// DxxM operation code
+#[allow(non_upper_case_globals)]
 pub const DxxM_OPCODE: u16 = 0x2000;
 
 /// DORM operation code
