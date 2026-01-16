@@ -177,18 +177,14 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                 to: DnxPhase::Handshake,
             });
 
+            // Initial handshake: send DnER.
+            // Most devices (including Moorefield 0A2C/0A65) respond to this.
             transport.write(&PREAMBLE_DNER.to_le_bytes())?;
-            info!(preamble = "DnER", "Sent preamble");
+            info!(preamble = "DnER", "Sent handshake preamble");
 
-            // Moorefield devices (0A2C, 0A65) often need IDRQ after DnER
-            let pid = transport.product_id();
-            if pid == crate::protocol::constants::MOOREFIELD_PRODUCT_ID
-                || pid == crate::protocol::constants::MOOREFIELD_ALT_PID
-            {
-                thread::sleep(Duration::from_millis(50));
-                transport.write(&crate::protocol::constants::PREAMBLE_IDRQ.to_le_bytes())?;
-                info!(preamble = "IDRQ", "Sent IDRQ preamble for Moorefield");
-            }
+            // We used to send IDRQ immediately for Moorefield here, but it caused
+            // "hardware fault or protocol violation" (EPROTO) on some devices.
+            // We'll now wait for the first response in the main loop instead.
         } else {
             // After reset, we might just wait for the first ACK from the new stage
             info!("Resuming state machine after reset");
