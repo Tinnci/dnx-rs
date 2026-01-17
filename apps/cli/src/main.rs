@@ -45,6 +45,10 @@ struct Args {
     #[arg(long)]
     ifwi_wipe: bool,
 
+    /// Load configuration from TOML file
+    #[arg(long)]
+    config: Option<String>,
+
     /// Hardware profile to use (e.g., 'eaglespeak', 'blackburn')
     #[arg(short, long)]
     profile: Option<String>,
@@ -141,6 +145,10 @@ impl DnxObserver for CliObserver {
             DnxEvent::Complete => {
                 eprintln!("✓ Operation complete!");
             }
+            DnxEvent::Packet { .. } => {
+                // Ignore packet-level details in CLI output
+                // Use tracing subscriber (RUST_LOG=trace) for that
+            }
         }
     }
 }
@@ -225,16 +233,39 @@ fn cmd_download(args: &Args, profile: Option<&String>) -> Result<(), Box<dyn std
         }
     }
 
-    let config = SessionConfig {
-        fw_dnx_path: fw_dnx,
-        fw_image_path: args.fw_image.clone(),
-        os_dnx_path: args.os_dnx.clone(),
-        os_image_path: os_image,
-        misc_dnx_path: args.misc_dnx.clone(),
-        gp_flags: args.gp_flags,
-        ifwi_wipe_enable: args.ifwi_wipe,
-        retry_timeout_secs: 300,
+    let mut config = if let Some(config_path) = &args.config {
+        SessionConfig::load_from_file(config_path)?
+    } else {
+        SessionConfig::default()
     };
+
+    // Override with CLI args if present
+    if let Some(fw) = fw_dnx {
+        config.fw_dnx_path = Some(fw);
+    }
+    if let Some(img) = args.fw_image.clone() {
+        config.fw_image_path = Some(img);
+    }
+    if let Some(os) = args.os_dnx.clone() {
+        config.os_dnx_path = Some(os);
+    }
+    if let Some(img) = os_image {
+        config.os_image_path = Some(img);
+    }
+    if let Some(misc) = args.misc_dnx.clone() {
+        config.misc_dnx_path = Some(misc);
+    }
+
+    if args.gp_flags != 0 {
+        config.gp_flags = args.gp_flags;
+    }
+    if args.ifwi_wipe {
+        config.ifwi_wipe_enable = true;
+    }
+
+    if config.retry_timeout_secs == 0 {
+        config.retry_timeout_secs = 300;
+    }
 
     let observer = Arc::new(CliObserver {
         verbose: args.verbose,

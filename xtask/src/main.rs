@@ -141,6 +141,14 @@ enum Commands {
         #[command(subcommand)]
         cmd: FirmwareCommands,
     },
+
+    /// Generate a new integration test template
+    #[command(name = "generate-test")]
+    GenerateTest {
+        /// Name of the test case
+        #[arg(short, long)]
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -247,6 +255,7 @@ fn main() -> Result<()> {
                 detailed,
             } => cmd_firmware_compare(&file1, &file2, detailed)?,
         },
+        Commands::GenerateTest { name } => cmd_generate_test(&name)?,
     }
 
     Ok(())
@@ -547,6 +556,46 @@ fn cmd_report(output: Option<PathBuf>, _all: bool) -> Result<()> {
     Ok(())
 }
 
+fn cmd_generate_test(name: &str) -> Result<()> {
+    let root = project_root();
+    let tests_dir = root.join("tests");
+    std::fs::create_dir_all(&tests_dir)?;
+    let test_file = tests_dir.join(format!("{}.rs", name));
+
+    if test_file.exists() {
+        anyhow::bail!("Test file already exists: {}", test_file.display());
+    }
+
+    println!("🧪 Generating test template: {}", test_file.display());
+
+    let content = format!(
+        r#"use dnx_core::{{DnxSession, SessionConfig}};
+use dnx_core::transport::MockTransport;
+use std::sync::Arc;
+
+#[test]
+fn test_{}() {{
+    // 1. Setup Mock Transport with expected sequence
+    let mock = MockTransport::new();
+    
+    // Example: Mock setup
+    // mock.expect_write(&[...]); 
+
+    // 2. Configure Session
+    let config = SessionConfig::default();
+    
+    // 3. Run Test
+    println!("Test template generated for {{}}", "{}");
+}}
+"#,
+        name, name
+    );
+
+    std::fs::write(&test_file, content)?;
+    println!("✅ Test template created");
+    Ok(())
+}
+
 // ============================================================================
 // Firmware Subcommands
 // ============================================================================
@@ -609,31 +658,21 @@ fn cmd_firmware_validate(target: &str) -> Result<()> {
         anyhow::bail!("Firmware file not found: {}", path.display());
     }
 
-    let data = std::fs::read(&path)?;
+    // Use unified API
+    let analysis = dnx_core::FirmwareAnalysis::analyze(&path)?;
 
-    // Check magic strings
-    let checks = [
-        (b"$DnX".as_slice(), "DnX signature"),
-        (b"CH00".as_slice(), "Chaabi marker"),
-        (b"CDPH".as_slice(), "CDPH marker"),
-    ];
-
-    println!("  File: {}", path.display());
-    println!("  Size: {} bytes", data.len());
+    println!("  File: {}", analysis.filename);
+    println!("  Size: {} bytes", analysis.size);
+    println!("  Type: {}", analysis.file_type);
     println!();
     println!("  Validation checks:");
 
-    let mut all_passed = true;
-    for (pattern, name) in checks {
-        let found = data.windows(pattern.len()).any(|w| w == pattern);
-        let status = if found { "✅" } else { "❌" };
-        println!("    {} {}", status, name);
-        if !found {
-            all_passed = false;
-        }
+    for check in &analysis.validations {
+        let status = if check.passed { "✅" } else { "❌" };
+        println!("    {} {}: {}", status, check.name, check.message);
     }
 
-    if all_passed {
+    if analysis.is_valid() {
         println!("\n✅ Firmware validation passed");
     } else {
         println!("\n⚠️  Some validation checks failed");
@@ -716,66 +755,28 @@ fn cmd_firmware_extract(source: &Path, output: Option<PathBuf>, component: &str)
 
 fn cmd_firmware_compare(file1: &Path, file2: &Path, detailed: bool) -> Result<()> {
     println!("🔄 Comparing firmware files...");
-    println!("  File 1: {}", file1.display());
-    println!("  File 2: {}", file2.display());
-    println!();
 
-    let data1 = std::fs::read(file1)?;
-    let data2 = std::fs::read(file2)?;
+    let result = dnx_core::FirmwareComparison::compare(file1, file2)?;
+    println!("{}", result.to_text());
 
-    println!("  Size comparison:");
-    println!("    File 1: {} bytes", data1.len());
-    println!("    File 2: {} bytes", data2.len());
-    println!(
-        "    Difference: {} bytes",
-        (data1.len() as i64 - data2.len() as i64).abs()
-    );
-
-    if data1.len() != data2.len() {
-        println!("\n⚠️  Files have different sizes");
-        return Ok(());
-    }
-
-    // Count differences
-    let diff_count: usize = data1
-        .iter()
-        .zip(data2.iter())
-        .filter(|(a, b)| a != b)
-        .count();
-    let diff_pct = (diff_count as f64 / data1.len() as f64) * 100.0;
-
-    println!("\n  Byte comparison:");
-    println!("    Different bytes: {}", diff_count);
-    println!("    Difference: {:.3}%", diff_pct);
-
-    if detailed && diff_count > 0 && diff_count < 1000 {
-        println!("\n  Detailed differences (first 50):");
-        let mut shown = 0;
-        for (i, (a, b)) in data1.iter().zip(data2.iter()).enumerate() {
-            if a != b {
-                println!("    0x{:05X}: {:02X} -> {:02X}", i, a, b);
-                shown += 1;
-                if shown >= 50 {
-                    println!("    ... ({} more differences)", diff_count - 50);
-                    break;
+    if detailed && !result.diff_regions.is_empty() {
+        // Detailed binary diff if requested
+        if result.diff_count > 0 && result.diff_count < 1000 {
+            let data1 = std::fs::read(file1)?;
+            let data2 = std::fs::read(file2)?;
+            println!("\n  Detailed differences (first 50):");
+            let mut shown = 0;
+            for (i, (a, b)) in data1.iter().zip(data2.iter()).enumerate() {
+                if a != b {
+                    println!("    0x{:05X}: {:02X} -> {:02X}", i, a, b);
+                    shown += 1;
+                    if shown >= 50 {
+                        println!("    ... ({} more differences)", result.diff_count - 50);
+                        break;
+                    }
                 }
             }
         }
-    }
-
-    // Compare RSA signatures
-    if data1.len() >= 0x188 && data2.len() >= 0x188 {
-        let rsa1 = &data1[0x88..0x188];
-        let rsa2 = &data2[0x88..0x188];
-        let rsa_match = rsa1 == rsa2;
-        println!(
-            "\n  RSA Signature: {}",
-            if rsa_match {
-                "✅ Identical"
-            } else {
-                "❌ Different"
-            }
-        );
     }
 
     Ok(())

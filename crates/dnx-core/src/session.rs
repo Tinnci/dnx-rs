@@ -7,14 +7,15 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 use tracing::{info, instrument, warn};
 
-use crate::events::{DnxEvent, DnxObserver, DnxPhase, TracingObserver};
+use crate::events::{DnxEvent, DnxObserver, DnxPhase, PacketDirection, TracingObserver};
 use crate::protocol::constants::PREAMBLE_DNER;
 use crate::state::handlers::{HandleResult, HandlerContext, handle_ack};
 use crate::state::machine::StateMachineContext;
 use crate::transport::{NusbTransport, TransportError, UsbTransport};
+use serde::{Deserialize, Serialize};
 
 /// Configuration for a DnX session.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SessionConfig {
     /// Path to FW DnX binary.
     pub fw_dnx_path: Option<String>,
@@ -32,6 +33,22 @@ pub struct SessionConfig {
     pub ifwi_wipe_enable: bool,
     /// Retry timeout in seconds.
     pub retry_timeout_secs: u64,
+}
+
+impl SessionConfig {
+    /// Load configuration from a TOML file
+    pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let config: SessionConfig = toml::from_str(&content)?;
+        Ok(config)
+    }
+
+    /// Save configuration to a TOML file
+    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<()> {
+        let content = toml::to_string_pretty(self)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 /// DnX Session - orchestrates the complete download process.
@@ -113,8 +130,14 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
                 pid: transport.product_id(),
             });
 
+            // Wrap transport with observer
+            let obs_transport = ObservableTransport {
+                inner: &transport,
+                observer: &self.observer,
+            };
+
             // Run state machine
-            let result = self.run_state_machine(&transport, &mut state);
+            let result = self.run_state_machine(&obs_transport, &mut state);
 
             match result {
                 Ok(HandleResult::Complete) => break,
@@ -165,9 +188,9 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         }
     }
 
-    fn run_state_machine(
+    fn run_state_machine<T: UsbTransport>(
         &self,
-        transport: &NusbTransport,
+        transport: &T,
         state: &mut StateMachineContext,
     ) -> Result<HandleResult> {
         // Send initial preamble only if we are starting fresh or after a reset that returns to DnX mode
@@ -262,5 +285,54 @@ impl<O: DnxObserver + 'static> DnxSession<O> {
         }
 
         Ok(HandleResult::Complete)
+    }
+}
+
+/// Transport wrapper that emits packet events.
+struct ObservableTransport<'a, T: UsbTransport, O: DnxObserver> {
+    inner: &'a T,
+    observer: &'a Arc<O>,
+}
+
+impl<'a, T: UsbTransport, O: DnxObserver> UsbTransport for ObservableTransport<'a, T, O> {
+    fn write(&self, data: &[u8]) -> Result<usize, TransportError> {
+        let res = self.inner.write(data);
+        if res.is_ok() {
+            let packet_type = if data.len() < 32 { "Cmd/Hdr" } else { "Data" };
+            self.observer.on_event(&DnxEvent::Packet {
+                direction: PacketDirection::Tx,
+                packet_type: packet_type.to_string(),
+                length: data.len(),
+                data: Some(data.iter().take(32).cloned().collect()),
+            });
+        }
+        res
+    }
+
+    fn read(&self, max_len: usize) -> Result<Vec<u8>, TransportError> {
+        let res = self.inner.read(max_len);
+        if let Ok(data) = &res {
+            if !data.is_empty() {
+                self.observer.on_event(&DnxEvent::Packet {
+                    direction: PacketDirection::Rx,
+                    packet_type: "Data".to_string(),
+                    length: data.len(),
+                    data: Some(data.iter().take(32).cloned().collect()),
+                });
+            }
+        }
+        res
+    }
+
+    fn is_connected(&self) -> bool {
+        self.inner.is_connected()
+    }
+
+    fn vendor_id(&self) -> u16 {
+        self.inner.vendor_id()
+    }
+
+    fn product_id(&self) -> u16 {
+        self.inner.product_id()
     }
 }

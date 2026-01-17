@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use dnx_core::events::{DnxEvent, DnxObserver, DnxPhase, LogLevel};
+use dnx_core::events::{DnxEvent, DnxObserver, DnxPhase, LogLevel, PacketDirection};
 use dnx_core::firmware::FirmwareAnalysis;
 use dnx_core::session::{DnxSession, SessionConfig};
 
@@ -52,6 +52,10 @@ pub struct App {
     session_thread: Option<JoinHandle<()>>,
     /// Firmware analysis info (cached)
     pub fw_analysis: Option<FirmwareAnalysis>,
+    /// Recent packets
+    pub packets: VecDeque<PacketInfo>,
+    /// Packet scroll position
+    pub packet_scroll: usize,
 }
 
 /// Which pane is focused.
@@ -67,6 +71,7 @@ pub enum Focus {
 pub enum Tab {
     Main,
     Logs,
+    Protocol,
     Help,
 }
 
@@ -83,6 +88,16 @@ pub struct LogEntry {
     pub level: LogLevel,
     pub message: String,
     pub timestamp: String,
+}
+
+/// Packet info for display.
+#[derive(Debug, Clone)]
+pub struct PacketInfo {
+    pub direction: PacketDirection,
+    pub timestamp: String,
+    pub packet_type: String,
+    pub length: usize,
+    pub data_preview: String,
 }
 
 /// TUI observer that collects events for display.
@@ -141,6 +156,8 @@ impl App {
             observer: Arc::new(TuiObserver::new()),
             session_thread: None,
             fw_analysis: None,
+            packets: VecDeque::with_capacity(100),
+            packet_scroll: 0,
         }
     }
 
@@ -194,6 +211,10 @@ impl App {
                 self.current_tab = Tab::Logs;
                 return false;
             }
+            KeyCode::F(3) => {
+                self.current_tab = Tab::Protocol;
+                return false;
+            }
             _ => {}
         }
 
@@ -201,6 +222,7 @@ impl App {
         match self.current_tab {
             Tab::Main => self.handle_main_key(key),
             Tab::Logs => self.handle_logs_key(key),
+            Tab::Protocol => self.handle_protocol_key(key),
             Tab::Help => {
                 // Any key returns to main
                 self.current_tab = Tab::Main;
@@ -269,6 +291,33 @@ impl App {
             }
             KeyCode::End => {
                 self.log_scroll = self.logs.len().saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_protocol_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.packet_scroll = self.packet_scroll.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.packet_scroll < self.packets.len().saturating_sub(1) {
+                    self.packet_scroll += 1;
+                }
+            }
+            KeyCode::PageUp => {
+                self.packet_scroll = self.packet_scroll.saturating_sub(10);
+            }
+            KeyCode::PageDown => {
+                self.packet_scroll =
+                    (self.packet_scroll + 10).min(self.packets.len().saturating_sub(1));
+            }
+            KeyCode::Home => {
+                self.packet_scroll = 0;
+            }
+            KeyCode::End => {
+                self.packet_scroll = self.packets.len().saturating_sub(1);
             }
             _ => {}
         }
@@ -432,6 +481,37 @@ impl App {
                 self.is_running = false;
                 self.progress = 100;
                 self.add_log(LogLevel::Info, "Operation complete!");
+            }
+            DnxEvent::Packet {
+                direction,
+                packet_type,
+                length,
+                data,
+            } => {
+                let now = chrono::Local::now();
+                let data_preview = if let Some(d) = data {
+                    d.iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                } else {
+                    String::new()
+                };
+
+                let packet = PacketInfo {
+                    direction,
+                    timestamp: now.format("%H:%M:%S.%3f").to_string(), // Milliseconds
+                    packet_type,
+                    length,
+                    data_preview,
+                };
+
+                if self.packets.len() >= 1000 {
+                    self.packets.pop_front();
+                }
+                self.packets.push_back(packet);
+                // Auto-scroll
+                self.packet_scroll = self.packets.len().saturating_sub(1);
             }
         }
     }

@@ -33,6 +33,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     match app.current_tab {
         Tab::Main => draw_main_view(frame, chunks[1], app),
         Tab::Logs => draw_logs_view(frame, chunks[1], app),
+        Tab::Protocol => draw_protocol_view(frame, chunks[1], app),
         Tab::Help => draw_help_view(frame, chunks[1]),
     }
 
@@ -40,11 +41,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
-    let titles = vec!["Main", "Logs (F2)", "Help (F1)"];
+    let titles = vec!["Main", "Logs (F2)", "Protocol (F3)", "Help (F1)"];
     let selected = match app.current_tab {
         Tab::Main => 0,
         Tab::Logs => 1,
-        Tab::Help => 2,
+        Tab::Protocol => 2,
+        Tab::Help => 3,
     };
 
     let tabs = Tabs::new(titles)
@@ -390,6 +392,51 @@ fn draw_logs_view(frame: &mut Frame, area: Rect, app: &App) {
                 )),
         )
         .style(Style::default().fg(Color::White));
+
+    frame.render_widget(list, area);
+}
+
+fn draw_protocol_view(frame: &mut Frame, area: Rect, app: &App) {
+    let items: Vec<ListItem> = app
+        .packets
+        .iter()
+        .skip(app.packet_scroll)
+        .take(area.height.saturating_sub(2) as usize)
+        .map(|p| {
+            let (dir_icon, color) = match p.direction {
+                dnx_core::events::PacketDirection::Tx => ("->", Color::Yellow),
+                dnx_core::events::PacketDirection::Rx => ("<-", Color::Green),
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled(
+                    format!("{} ", p.timestamp),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(format!("{} ", dir_icon), Style::default().fg(color)),
+                Span::styled(
+                    format!("{:<8} ", p.packet_type),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::styled(
+                    format!("({} B) ", p.length),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(p.data_preview.clone(), Style::default().fg(Color::White)),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Blue))
+            .title(format!(
+                " Protocol Monitor ({}/{}) ",
+                app.packet_scroll + 1,
+                app.packets.len().max(1)
+            )),
+    );
 
     frame.render_widget(list, area);
 }

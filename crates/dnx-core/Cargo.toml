@@ -9,3 +9,5 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 nusb = { workspace = true }
 byteorder = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"

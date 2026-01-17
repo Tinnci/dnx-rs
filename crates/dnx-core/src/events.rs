@@ -70,8 +70,31 @@ pub enum DnxEvent {
     AckReceived { ack: String },
     /// Error occurred.
     Error { code: u32, message: String },
+    /// USB Packet sent/received.
+    Packet {
+        direction: PacketDirection,
+        packet_type: String,
+        length: usize,
+        data: Option<Vec<u8>>,
+    },
     /// All operations completed successfully.
     Complete,
+}
+
+/// USB packet direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PacketDirection {
+    Tx, // Transmit (Host -> Device)
+    Rx, // Receive (Device -> Host)
+}
+
+impl fmt::Display for PacketDirection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PacketDirection::Tx => write!(f, "TX"),
+            PacketDirection::Rx => write!(f, "RX"),
+        }
+    }
 }
 
 /// Observer trait for receiving DnX events.
@@ -131,6 +154,19 @@ impl DnxObserver for TracingObserver {
             }
             DnxEvent::Error { code, message } => {
                 tracing::error!(code = code, "Error: {}", message);
+            }
+            DnxEvent::Packet {
+                direction,
+                packet_type,
+                length,
+                ..
+            } => {
+                tracing::trace!(
+                    dir = %direction,
+                    type_ = %packet_type,
+                    len = length,
+                    "USB Packet"
+                );
             }
             DnxEvent::Complete => {
                 tracing::info!("Operation complete");
