@@ -12,6 +12,7 @@
 //! - **State**: State machine and ACK handlers
 //! - **Events**: Observer pattern for UI decoupling
 //! - **Session**: High-level orchestrator
+//! - **IFWI Version**: Extract firmware version info from IFWI images
 //!
 //! # Example
 //!
@@ -29,6 +30,7 @@
 //! ```
 
 pub mod events;
+pub mod ifwi_version;
 pub mod payload;
 pub mod protocol;
 pub mod session;
@@ -37,6 +39,9 @@ pub mod transport;
 
 // Re-exports for convenience
 pub use events::{DnxEvent, DnxObserver, DnxPhase, LogLevel, TracingObserver};
+pub use ifwi_version::{
+    FirmwareVersions, Version, check_ifwi_file, check_ifwi_path, get_image_fw_rev,
+};
 pub use payload::{ChunkState, FirmwareImage, OsChunkState, OsImage};
 pub use protocol::AckCode;
 pub use session::{DnxSession, SessionConfig};

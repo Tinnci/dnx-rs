@@ -1,6 +1,7 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use dnx_core::events::{DnxEvent, DnxObserver, LogLevel};
 use dnx_core::session::{DnxSession, SessionConfig};
+use std::path::Path;
 use std::sync::Arc;
 use tracing::{error, info};
 
@@ -13,6 +14,9 @@ use tracing::{error, info};
     long_about = "A modern Rust implementation of Intel xFSTK for Medfield/Merrifield platform recovery."
 )]
 struct Args {
+    #[command(subcommand)]
+    command: Option<Commands>,
+
     /// Path to FW DnX binary (dnx_fwr.bin)
     #[arg(long)]
     fw_dnx: Option<String>,
@@ -48,6 +52,39 @@ struct Args {
     /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Download firmware/OS to device (default behavior)
+    Download {
+        /// Hardware profile to use
+        #[arg(short, long)]
+        profile: Option<String>,
+    },
+
+    /// Dump IFWI version information from firmware image
+    #[command(name = "ifwi-version")]
+    IfwiVersion {
+        /// Path to IFWI/DnX image file
+        #[arg(required = true)]
+        file: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Output in markdown format
+        #[arg(long)]
+        markdown: bool,
+    },
+
+    /// Analyze firmware file structure
+    Analyze {
+        /// Path to firmware file
+        #[arg(required = true)]
+        file: String,
+    },
 }
 
 /// CLI observer that prints progress to stderr.
@@ -108,6 +145,138 @@ impl DnxObserver for CliObserver {
     }
 }
 
+fn cmd_ifwi_version(
+    file: &str,
+    json: bool,
+    markdown: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let path = Path::new(file);
+
+    if !path.exists() {
+        return Err(format!("File not found: {}", file).into());
+    }
+
+    let data = std::fs::read(path)?;
+    let versions = dnx_core::get_image_fw_rev(&data)?;
+
+    if json {
+        // JSON output
+        println!("{{");
+        println!("  \"ifwi\": \"{}\",", versions.ifwi);
+        println!("  \"scu\": \"{}\",", versions.scu);
+        println!("  \"hooks_oem\": \"{}\",", versions.valhooks);
+        println!("  \"ia32\": \"{}\",", versions.ia32);
+        println!("  \"chaabi\": \"{}\",", versions.chaabi);
+        println!("  \"mia\": \"{}\"", versions.mia);
+        println!("}}");
+    } else if markdown {
+        // Markdown table output
+        println!("{}", versions.to_markdown());
+    } else {
+        // Default: human-readable
+        versions.dump();
+    }
+
+    Ok(())
+}
+
+fn cmd_analyze(file: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let path = Path::new(file);
+
+    if !path.exists() {
+        return Err(format!("File not found: {}", file).into());
+    }
+
+    let data = std::fs::read(path)?;
+    let size = data.len();
+
+    println!("Firmware Analysis: {}", file);
+    println!("==================");
+    println!("File size: {} bytes ({:.2} KB)", size, size as f64 / 1024.0);
+    println!();
+
+    // Search for magic strings
+    let markers: &[(&str, &[u8])] = &[
+        ("$DnX", b"$DnX"),
+        ("$FIP", b"$FIP"),
+        ("$CHT", b"$CHT"),
+        ("CH00", b"CH00"),
+        ("CDPH", b"CDPH"),
+        ("IFWI", b"IFWI"),
+        ("$OS$", b"$OS$"),
+        ("ANDROID!", b"ANDROID!"),
+    ];
+
+    println!("Magic markers found:");
+    for (name, pattern) in markers {
+        if let Some(pos) = data.windows(pattern.len()).position(|w| w == *pattern) {
+            println!("  {}: 0x{:05X} ({})", name, pos, pos);
+        }
+    }
+
+    // Try to get IFWI versions
+    println!();
+    if let Ok(versions) = dnx_core::get_image_fw_rev(&data) {
+        println!("IFWI Versions:");
+        println!("  IFWI: {}", versions.ifwi);
+        println!("  SCU: {}", versions.scu);
+        println!("  Chaabi: {}", versions.chaabi);
+    } else {
+        println!("Note: No FIP version block found in this file.");
+    }
+
+    Ok(())
+}
+
+fn cmd_download(args: &Args, profile: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut fw_dnx = args.fw_dnx.clone();
+    let mut os_image = args.os_image.clone();
+
+    let effective_profile = profile.or(args.profile.as_ref());
+
+    if let Some(profile) = effective_profile {
+        match profile.as_str() {
+            "eaglespeak" => {
+                fw_dnx = fw_dnx.or(Some("assets/firmware/eaglespeak/dnx_fwr.bin".to_string()));
+                os_image = os_image.or(Some("assets/firmware/eaglespeak/dnx_osr.img".to_string()));
+                info!("Using profile: eaglespeak (Atom Z3580)");
+            }
+            "blackburn" => {
+                fw_dnx = fw_dnx.or(Some("assets/firmware/blackburn/dnx_fwr.bin".to_string()));
+                os_image = os_image.or(Some("assets/firmware/blackburn/dnx_osr.img".to_string()));
+                info!("Using profile: blackburn (Atom Z3530)");
+            }
+            _ => {
+                error!("Unknown profile: {}", profile);
+                return Err(format!(
+                    "Unknown profile '{}'. Available: eaglespeak, blackburn",
+                    profile
+                )
+                .into());
+            }
+        }
+    }
+
+    let config = SessionConfig {
+        fw_dnx_path: fw_dnx,
+        fw_image_path: args.fw_image.clone(),
+        os_dnx_path: args.os_dnx.clone(),
+        os_image_path: os_image,
+        misc_dnx_path: args.misc_dnx.clone(),
+        gp_flags: args.gp_flags,
+        ifwi_wipe_enable: args.ifwi_wipe,
+        retry_timeout_secs: 300,
+    };
+
+    let observer = Arc::new(CliObserver {
+        verbose: args.verbose,
+    });
+    let mut session = DnxSession::with_observer(config, observer);
+
+    session.run()?;
+    Ok(())
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -129,50 +298,22 @@ fn main() {
 
     info!("DnX-rs Tool starting...");
 
-    let mut fw_dnx = args.fw_dnx;
-    let mut os_image = args.os_image;
-
-    if let Some(profile) = &args.profile {
-        match profile.as_str() {
-            "eaglespeak" => {
-                fw_dnx = fw_dnx.or(Some("assets/firmware/eaglespeak/dnx_fwr.bin".to_string()));
-                os_image = os_image.or(Some("assets/firmware/eaglespeak/dnx_osr.img".to_string()));
-                info!("Using profile: eaglespeak (Atom Z3580)");
-            }
-            "blackburn" => {
-                fw_dnx = fw_dnx.or(Some("assets/firmware/blackburn/dnx_fwr.bin".to_string()));
-                os_image = os_image.or(Some("assets/firmware/blackburn/dnx_osr.img".to_string()));
-                info!("Using profile: blackburn (Atom Z3530)");
-            }
-            _ => {
-                error!("Unknown profile: {}", profile);
-                eprintln!(
-                    "✗ Error: Unknown profile '{}'. Available: eaglespeak, blackburn",
-                    profile
-                );
-                std::process::exit(1);
-            }
+    let result = match &args.command {
+        Some(Commands::IfwiVersion {
+            file,
+            json,
+            markdown,
+        }) => cmd_ifwi_version(file, *json, *markdown),
+        Some(Commands::Analyze { file }) => cmd_analyze(file),
+        Some(Commands::Download { profile }) => cmd_download(&args, profile.as_ref()),
+        None => {
+            // Default behavior: run download
+            cmd_download(&args, args.profile.as_ref())
         }
-    }
-
-    let config = SessionConfig {
-        fw_dnx_path: fw_dnx,
-        fw_image_path: args.fw_image,
-        os_dnx_path: args.os_dnx,
-        os_image_path: os_image,
-        misc_dnx_path: args.misc_dnx,
-        gp_flags: args.gp_flags,
-        ifwi_wipe_enable: args.ifwi_wipe,
-        retry_timeout_secs: 300, // 5 minutes
     };
 
-    let observer = Arc::new(CliObserver {
-        verbose: args.verbose,
-    });
-    let mut session = DnxSession::with_observer(config, observer);
-
-    if let Err(e) = session.run() {
-        error!("Session failed: {}", e);
+    if let Err(e) = result {
+        error!("Command failed: {}", e);
         eprintln!("✗ FAILED: {}", e);
         std::process::exit(1);
     }
