@@ -296,12 +296,12 @@ fn handle_difwi<T: UsbTransport, O: DnxObserver>(
 
     if ctx.state.ifwi_state.total == 0 {
         // Not initialized? Try to find boundaries again.
-        if let Some(dnx_data) = ctx.fw_dnx_data {
-            if let Some((start, _)) = find_chaabi_range(dnx_data) {
-                let ifwi_len = start;
-                ctx.state.ifwi_state =
-                    crate::payload::ChunkState::new(ifwi_len, crate::protocol::constants::ONE28_K);
-            }
+        if let Some(dnx_data) = ctx.fw_dnx_data
+            && let Some((start, _)) = find_chaabi_range(dnx_data)
+        {
+            let ifwi_len = start;
+            ctx.state.ifwi_state =
+                crate::payload::ChunkState::new(ifwi_len, crate::protocol::constants::ONE28_K);
         }
     }
 
@@ -530,22 +530,22 @@ fn handle_psfw2<T: UsbTransport, O: DnxObserver>(
 
     if let Some(fw) = ctx.fw_image {
         let psfw2 = fw.psfw2_bytes();
-        if !psfw2.is_empty() {
-            if let Some(chunk) = ctx.state.psfw2_state.next_chunk(psfw2) {
-                ctx.transport.write(chunk)?;
-                ctx.emit(DnxEvent::Progress {
-                    phase: crate::events::DnxPhase::FirmwareDownload,
-                    operation: "PSFW2".to_string(),
-                    current: ctx.state.psfw2_state.current as u64,
-                    total: ctx.state.psfw2_state.total as u64,
-                });
-                debug!(
-                    "PSFW2 chunk {}/{}: {} bytes",
-                    ctx.state.psfw2_state.current,
-                    ctx.state.psfw2_state.total,
-                    chunk.len()
-                );
-            }
+        if !psfw2.is_empty()
+            && let Some(chunk) = ctx.state.psfw2_state.next_chunk(psfw2)
+        {
+            ctx.transport.write(chunk)?;
+            ctx.emit(DnxEvent::Progress {
+                phase: crate::events::DnxPhase::FirmwareDownload,
+                operation: "PSFW2".to_string(),
+                current: ctx.state.psfw2_state.current as u64,
+                total: ctx.state.psfw2_state.total as u64,
+            });
+            debug!(
+                "PSFW2 chunk {}/{}: {} bytes",
+                ctx.state.psfw2_state.current,
+                ctx.state.psfw2_state.total,
+                chunk.len()
+            );
         }
     }
 
@@ -560,22 +560,22 @@ fn handle_ssfw<T: UsbTransport, O: DnxObserver>(
 
     if let Some(fw) = ctx.fw_image {
         let ssfw = fw.ssfw_bytes();
-        if !ssfw.is_empty() {
-            if let Some(chunk) = ctx.state.ssfw_state.next_chunk(ssfw) {
-                ctx.transport.write(chunk)?;
-                ctx.emit(DnxEvent::Progress {
-                    phase: crate::events::DnxPhase::FirmwareDownload,
-                    operation: "SSFW".to_string(),
-                    current: ctx.state.ssfw_state.current as u64,
-                    total: ctx.state.ssfw_state.total as u64,
-                });
-                debug!(
-                    "SSFW chunk {}/{}: {} bytes",
-                    ctx.state.ssfw_state.current,
-                    ctx.state.ssfw_state.total,
-                    chunk.len()
-                );
-            }
+        if !ssfw.is_empty()
+            && let Some(chunk) = ctx.state.ssfw_state.next_chunk(ssfw)
+        {
+            ctx.transport.write(chunk)?;
+            ctx.emit(DnxEvent::Progress {
+                phase: crate::events::DnxPhase::FirmwareDownload,
+                operation: "SSFW".to_string(),
+                current: ctx.state.ssfw_state.current as u64,
+                total: ctx.state.ssfw_state.total as u64,
+            });
+            debug!(
+                "SSFW chunk {}/{}: {} bytes",
+                ctx.state.ssfw_state.current,
+                ctx.state.ssfw_state.total,
+                chunk.len()
+            );
         }
     }
 
@@ -590,22 +590,22 @@ fn handle_vedfw<T: UsbTransport, O: DnxObserver>(
 
     if let Some(fw) = ctx.fw_image {
         let vedfw = fw.vedfw_bytes();
-        if !vedfw.is_empty() {
-            if let Some(chunk) = ctx.state.vedfw_state.next_chunk(vedfw) {
-                ctx.transport.write(chunk)?;
-                ctx.emit(DnxEvent::Progress {
-                    phase: crate::events::DnxPhase::FirmwareDownload,
-                    operation: "VEDFW".to_string(),
-                    current: ctx.state.vedfw_state.current as u64,
-                    total: ctx.state.vedfw_state.total as u64,
-                });
-                debug!(
-                    "VEDFW chunk {}/{}: {} bytes",
-                    ctx.state.vedfw_state.current,
-                    ctx.state.vedfw_state.total,
-                    chunk.len()
-                );
-            }
+        if !vedfw.is_empty()
+            && let Some(chunk) = ctx.state.vedfw_state.next_chunk(vedfw)
+        {
+            ctx.transport.write(chunk)?;
+            ctx.emit(DnxEvent::Progress {
+                phase: crate::events::DnxPhase::FirmwareDownload,
+                operation: "VEDFW".to_string(),
+                current: ctx.state.vedfw_state.current as u64,
+                total: ctx.state.vedfw_state.total as u64,
+            });
+            debug!(
+                "VEDFW chunk {}/{}: {} bytes",
+                ctx.state.vedfw_state.current,
+                ctx.state.vedfw_state.total,
+                chunk.len()
+            );
         }
     }
 

@@ -3,9 +3,10 @@
 use std::fmt;
 
 /// Internal state of the DnX downloader.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DldrState {
     /// Invalid / initial state.
+    #[default]
     Invalid,
     /// Normal firmware download (virgin part).
     FwNormal,
@@ -17,12 +18,6 @@ pub enum DldrState {
     OsNormal,
     /// Misc OS download.
     OsMisc,
-}
-
-impl Default for DldrState {
-    fn default() -> Self {
-        Self::Invalid
-    }
 }
 
 impl fmt::Display for DldrState {

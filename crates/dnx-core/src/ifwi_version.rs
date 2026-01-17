@@ -93,7 +93,7 @@ struct FipVersionBlock {
 }
 
 impl FipVersionBlock {
-    fn to_version(&self) -> Version {
+    fn as_version(&self) -> Version {
         Version {
             major: self.major,
             minor: self.minor,
@@ -229,7 +229,7 @@ pub fn get_image_fw_rev(data: &[u8]) -> Result<FirmwareVersions, IfwiError> {
             unsafe { std::ptr::read_unaligned(data[offset..].as_ptr() as *const FipHeader) };
 
         // Update versions (don't update if null)
-        let scuc = fip.scuc_rev.to_version();
+        let scuc = fip.scuc_rev.as_version();
         if scuc.minor != 0 {
             versions.scu.minor = scuc.minor;
         }
@@ -237,7 +237,7 @@ pub fn get_image_fw_rev(data: &[u8]) -> Result<FirmwareVersions, IfwiError> {
             versions.scu.major = scuc.major;
         }
 
-        let ia32 = fip.ia32_rev.to_version();
+        let ia32 = fip.ia32_rev.as_version();
         if ia32.minor != 0 {
             versions.ia32.minor = ia32.minor;
         }
@@ -245,7 +245,7 @@ pub fn get_image_fw_rev(data: &[u8]) -> Result<FirmwareVersions, IfwiError> {
             versions.ia32.major = ia32.major;
         }
 
-        let oem = fip.oem_rev.to_version();
+        let oem = fip.oem_rev.as_version();
         if oem.minor != 0 {
             versions.valhooks.minor = oem.minor;
         }
@@ -253,7 +253,7 @@ pub fn get_image_fw_rev(data: &[u8]) -> Result<FirmwareVersions, IfwiError> {
             versions.valhooks.major = oem.major;
         }
 
-        let ifwi = fip.ifwi_rev.to_version();
+        let ifwi = fip.ifwi_rev.as_version();
         if ifwi.minor != 0 {
             versions.ifwi.minor = ifwi.minor;
         }
@@ -261,7 +261,7 @@ pub fn get_image_fw_rev(data: &[u8]) -> Result<FirmwareVersions, IfwiError> {
             versions.ifwi.major = ifwi.major;
         }
 
-        let ch00 = fip.ch00_rev.to_version();
+        let ch00 = fip.ch00_rev.as_version();
         if ch00.minor != 0 {
             versions.chaabi.minor = ch00.minor;
         }
@@ -269,7 +269,7 @@ pub fn get_image_fw_rev(data: &[u8]) -> Result<FirmwareVersions, IfwiError> {
             versions.chaabi.major = ch00.major;
         }
 
-        let mia = fip.mia_rev.to_version();
+        let mia = fip.mia_rev.as_version();
         if mia.minor != 0 {
             versions.mia.minor = mia.minor;
         }

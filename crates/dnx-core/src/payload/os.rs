@@ -169,7 +169,7 @@ impl<'a> OsChunkIterator<'a> {
         let total_chunks = if data.is_empty() {
             0
         } else {
-            (data.len() + chunk_size - 1) / chunk_size
+            data.len().div_ceil(chunk_size)
         };
 
         Self {
@@ -246,7 +246,7 @@ impl OsChunkState {
         let total = if data_size == 0 {
             0
         } else {
-            (data_size + chunk_size - 1) / chunk_size
+            data_size.div_ceil(chunk_size)
         };
         Self {
             current: 0,

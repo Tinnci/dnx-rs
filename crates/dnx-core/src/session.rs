@@ -311,15 +311,15 @@ impl<'a, T: UsbTransport, O: DnxObserver> UsbTransport for ObservableTransport<'
 
     fn read(&self, max_len: usize) -> Result<Vec<u8>, TransportError> {
         let res = self.inner.read(max_len);
-        if let Ok(data) = &res {
-            if !data.is_empty() {
-                self.observer.on_event(&DnxEvent::Packet {
-                    direction: PacketDirection::Rx,
-                    packet_type: "Data".to_string(),
-                    length: data.len(),
-                    data: Some(data.iter().take(32).cloned().collect()),
-                });
-            }
+        if let Ok(data) = &res
+            && !data.is_empty()
+        {
+            self.observer.on_event(&DnxEvent::Packet {
+                direction: PacketDirection::Rx,
+                packet_type: "Data".to_string(),
+                length: data.len(),
+                data: Some(data.iter().take(32).cloned().collect()),
+            });
         }
         res
     }
