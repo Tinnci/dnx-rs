@@ -217,6 +217,7 @@ fn draw_status_panel(frame: &mut Frame, area: Rect, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(5), // Progress
+            Constraint::Length(8), // Firmware info (NEW)
             Constraint::Min(5),    // Recent logs
         ])
         .split(area);
@@ -224,8 +225,93 @@ fn draw_status_panel(frame: &mut Frame, area: Rect, app: &App) {
     // Progress gauge
     draw_progress(frame, chunks[0], app);
 
+    // Firmware info panel (NEW)
+    draw_firmware_info(frame, chunks[1], app);
+
     // Recent logs
-    draw_recent_logs(frame, chunks[1], app);
+    draw_recent_logs(frame, chunks[2], app);
+}
+
+fn draw_firmware_info(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray))
+        .title(" Firmware Info ");
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let content = if let Some(analysis) = &app.fw_analysis {
+        let type_str = format!("{}", analysis.file_type);
+        let size_str = format!(
+            "{} bytes ({:.1} KB)",
+            analysis.size,
+            analysis.size as f64 / 1024.0
+        );
+
+        let token_str = if let Some(t) = &analysis.token {
+            format!("{} - {}", t.marker, t.platform)
+        } else {
+            "N/A".to_string()
+        };
+
+        let chaabi_str = if let Some(c) = &analysis.chaabi {
+            format!("{} bytes ({:.1} KB)", c.size, c.size as f64 / 1024.0)
+        } else {
+            "N/A".to_string()
+        };
+
+        let rsa_str = if analysis.rsa_signature.is_some() {
+            "✅ Intel Signed"
+        } else {
+            "❌ Not found"
+        };
+
+        let valid_str = if analysis.is_valid() {
+            "✅ Valid"
+        } else {
+            "⚠️ Issues"
+        };
+
+        vec![
+            Line::from(vec![
+                Span::styled("Type: ", Style::default().fg(Color::Cyan)),
+                Span::styled(type_str, Style::default().fg(Color::White)),
+                Span::raw("  "),
+                Span::styled("Size: ", Style::default().fg(Color::Cyan)),
+                Span::styled(size_str, Style::default().fg(Color::White)),
+            ]),
+            Line::from(vec![
+                Span::styled("Token: ", Style::default().fg(Color::Cyan)),
+                Span::styled(token_str, Style::default().fg(Color::White)),
+            ]),
+            Line::from(vec![
+                Span::styled("Chaabi: ", Style::default().fg(Color::Cyan)),
+                Span::styled(chaabi_str, Style::default().fg(Color::White)),
+            ]),
+            Line::from(vec![
+                Span::styled("RSA: ", Style::default().fg(Color::Cyan)),
+                Span::styled(rsa_str, Style::default().fg(Color::White)),
+                Span::raw("  "),
+                Span::styled("Status: ", Style::default().fg(Color::Cyan)),
+                Span::styled(valid_str, Style::default().fg(Color::White)),
+            ]),
+        ]
+    } else {
+        vec![
+            Line::from(Span::styled(
+                "No firmware loaded",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                "Enter a FW DnX path to analyze",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ]
+    };
+
+    let paragraph = Paragraph::new(content);
+    frame.render_widget(paragraph, inner);
 }
 
 fn draw_progress(frame: &mut Frame, area: Rect, app: &App) {

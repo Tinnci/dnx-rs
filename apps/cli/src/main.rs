@@ -187,43 +187,11 @@ fn cmd_analyze(file: &str) -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("File not found: {}", file).into());
     }
 
-    let data = std::fs::read(path)?;
-    let size = data.len();
+    // Use the unified FirmwareAnalysis API
+    let analysis = dnx_core::FirmwareAnalysis::analyze(path)?;
 
-    println!("Firmware Analysis: {}", file);
-    println!("==================");
-    println!("File size: {} bytes ({:.2} KB)", size, size as f64 / 1024.0);
-    println!();
-
-    // Search for magic strings
-    let markers: &[(&str, &[u8])] = &[
-        ("$DnX", b"$DnX"),
-        ("$FIP", b"$FIP"),
-        ("$CHT", b"$CHT"),
-        ("CH00", b"CH00"),
-        ("CDPH", b"CDPH"),
-        ("IFWI", b"IFWI"),
-        ("$OS$", b"$OS$"),
-        ("ANDROID!", b"ANDROID!"),
-    ];
-
-    println!("Magic markers found:");
-    for (name, pattern) in markers {
-        if let Some(pos) = data.windows(pattern.len()).position(|w| w == *pattern) {
-            println!("  {}: 0x{:05X} ({})", name, pos, pos);
-        }
-    }
-
-    // Try to get IFWI versions
-    println!();
-    if let Ok(versions) = dnx_core::get_image_fw_rev(&data) {
-        println!("IFWI Versions:");
-        println!("  IFWI: {}", versions.ifwi);
-        println!("  SCU: {}", versions.scu);
-        println!("  Chaabi: {}", versions.chaabi);
-    } else {
-        println!("Note: No FIP version block found in this file.");
-    }
+    // Print results
+    println!("{}", analysis.to_text());
 
     Ok(())
 }

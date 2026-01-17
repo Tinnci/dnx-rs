@@ -31,6 +31,7 @@
 //! ```
 
 pub mod events;
+pub mod firmware;
 pub mod fuph;
 pub mod ifwi_version;
 pub mod payload;
@@ -41,6 +42,7 @@ pub mod transport;
 
 // Re-exports for convenience
 pub use events::{DnxEvent, DnxObserver, DnxPhase, LogLevel, TracingObserver};
+pub use firmware::{FirmwareAnalysis, FirmwareComparison, FirmwareType};
 pub use fuph::{DnxHeader, FuphHeader};
 pub use ifwi_version::{
     FirmwareVersions, Version, check_ifwi_file, check_ifwi_path, get_image_fw_rev,

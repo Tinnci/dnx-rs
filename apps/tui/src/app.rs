@@ -3,11 +3,13 @@
 //! Contains the app state (Model), input handling (Controller).
 
 use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use dnx_core::events::{DnxEvent, DnxObserver, DnxPhase, LogLevel};
+use dnx_core::firmware::FirmwareAnalysis;
 use dnx_core::session::{DnxSession, SessionConfig};
 
 /// Maximum log entries to keep.
@@ -48,6 +50,8 @@ pub struct App {
     pub observer: Arc<TuiObserver>,
     /// Background session thread handle.
     session_thread: Option<JoinHandle<()>>,
+    /// Firmware analysis info (cached)
+    pub fw_analysis: Option<FirmwareAnalysis>,
 }
 
 /// Which pane is focused.
@@ -136,6 +140,29 @@ impl App {
             is_running: false,
             observer: Arc::new(TuiObserver::new()),
             session_thread: None,
+            fw_analysis: None,
+        }
+    }
+
+    /// Analyze firmware file and cache result
+    pub fn analyze_firmware(&mut self) {
+        if !self.fw_dnx_path.is_empty() {
+            let path = Path::new(&self.fw_dnx_path);
+            if path.exists() {
+                match FirmwareAnalysis::analyze(path) {
+                    Ok(analysis) => {
+                        self.add_log(
+                            LogLevel::Info,
+                            format!("Firmware analyzed: {}", analysis.filename),
+                        );
+                        self.fw_analysis = Some(analysis);
+                    }
+                    Err(e) => {
+                        self.add_log(LogLevel::Warn, format!("Failed to analyze firmware: {}", e));
+                        self.fw_analysis = None;
+                    }
+                }
+            }
         }
     }
 
@@ -248,6 +275,7 @@ impl App {
     }
 
     fn input_char(&mut self, c: char) {
+        let is_fw_dnx = self.input_focus == 0;
         let field = match self.input_focus {
             0 => &mut self.fw_dnx_path,
             1 => &mut self.fw_image_path,
@@ -256,9 +284,15 @@ impl App {
             _ => return,
         };
         field.push(c);
+
+        // Auto-analyze when FW DnX path changes
+        if is_fw_dnx {
+            self.analyze_firmware();
+        }
     }
 
     fn delete_char(&mut self) {
+        let is_fw_dnx = self.input_focus == 0;
         let field = match self.input_focus {
             0 => &mut self.fw_dnx_path,
             1 => &mut self.fw_image_path,
@@ -267,6 +301,11 @@ impl App {
             _ => return,
         };
         field.pop();
+
+        // Auto-analyze when FW DnX path changes
+        if is_fw_dnx {
+            self.analyze_firmware();
+        }
     }
 
     fn start_operation(&mut self) {
