@@ -49,6 +49,62 @@ impl SessionConfig {
         std::fs::write(path, content)?;
         Ok(())
     }
+
+    /// Load from file if path is provided, otherwise use default.
+    pub fn load_or_default(path: Option<&str>) -> Result<Self> {
+        match path {
+            Some(p) => Self::load_from_file(p),
+            None => Ok(Self::default()),
+        }
+    }
+
+    /// Apply sensible defaults for unset values.
+    pub fn with_defaults(mut self) -> Self {
+        if self.retry_timeout_secs == 0 {
+            self.retry_timeout_secs = 300;
+        }
+        self
+    }
+
+    /// Merge CLI-style overrides into this config.
+    /// Only overwrites fields that have explicit values (Some).
+    pub fn merge(
+        mut self,
+        fw_dnx: Option<String>,
+        fw_image: Option<String>,
+        os_dnx: Option<String>,
+        os_image: Option<String>,
+        misc_dnx: Option<String>,
+        gp_flags: Option<u32>,
+        ifwi_wipe: Option<bool>,
+    ) -> Self {
+        if let Some(v) = fw_dnx {
+            self.fw_dnx_path = Some(v);
+        }
+        if let Some(v) = fw_image {
+            self.fw_image_path = Some(v);
+        }
+        if let Some(v) = os_dnx {
+            self.os_dnx_path = Some(v);
+        }
+        if let Some(v) = os_image {
+            self.os_image_path = Some(v);
+        }
+        if let Some(v) = misc_dnx {
+            self.misc_dnx_path = Some(v);
+        }
+        if let Some(v) = gp_flags {
+            if v != 0 {
+                self.gp_flags = v;
+            }
+        }
+        if let Some(v) = ifwi_wipe {
+            if v {
+                self.ifwi_wipe_enable = true;
+            }
+        }
+        self
+    }
 }
 
 /// DnX Session - orchestrates the complete download process.

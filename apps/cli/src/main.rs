@@ -233,39 +233,18 @@ fn cmd_download(args: &Args, profile: Option<&String>) -> Result<(), Box<dyn std
         }
     }
 
-    let mut config = if let Some(config_path) = &args.config {
-        SessionConfig::load_from_file(config_path)?
-    } else {
-        SessionConfig::default()
-    };
-
-    // Override with CLI args if present
-    if let Some(fw) = fw_dnx {
-        config.fw_dnx_path = Some(fw);
-    }
-    if let Some(img) = args.fw_image.clone() {
-        config.fw_image_path = Some(img);
-    }
-    if let Some(os) = args.os_dnx.clone() {
-        config.os_dnx_path = Some(os);
-    }
-    if let Some(img) = os_image {
-        config.os_image_path = Some(img);
-    }
-    if let Some(misc) = args.misc_dnx.clone() {
-        config.misc_dnx_path = Some(misc);
-    }
-
-    if args.gp_flags != 0 {
-        config.gp_flags = args.gp_flags;
-    }
-    if args.ifwi_wipe {
-        config.ifwi_wipe_enable = true;
-    }
-
-    if config.retry_timeout_secs == 0 {
-        config.retry_timeout_secs = 300;
-    }
+    // Load config from file or default, then merge CLI overrides
+    let config = SessionConfig::load_or_default(args.config.as_deref())?
+        .merge(
+            fw_dnx,
+            args.fw_image.clone(),
+            args.os_dnx.clone(),
+            os_image,
+            args.misc_dnx.clone(),
+            Some(args.gp_flags),
+            Some(args.ifwi_wipe),
+        )
+        .with_defaults();
 
     let observer = Arc::new(CliObserver {
         verbose: args.verbose,

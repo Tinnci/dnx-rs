@@ -379,30 +379,34 @@ impl App {
         self.progress = 0;
         self.operation = "Starting...".to_string();
 
-        // Update config struct first
-        self.config.fw_dnx_path = if self.fw_dnx_path.is_empty() {
-            None
-        } else {
-            Some(self.fw_dnx_path.clone())
-        };
-        self.config.fw_image_path = if self.fw_image_path.is_empty() {
-            None
-        } else {
-            Some(self.fw_image_path.clone())
-        };
-        self.config.os_dnx_path = if self.os_dnx_path.is_empty() {
-            None
-        } else {
-            Some(self.os_dnx_path.clone())
-        };
-        self.config.os_image_path = if self.os_image_path.is_empty() {
-            None
-        } else {
-            Some(self.os_image_path.clone())
-        };
-
-        // Clone config for the thread
-        let session_config = self.config.clone();
+        // Build config from UI fields using the unified API
+        let session_config = SessionConfig::default()
+            .merge(
+                if self.fw_dnx_path.is_empty() {
+                    None
+                } else {
+                    Some(self.fw_dnx_path.clone())
+                },
+                if self.fw_image_path.is_empty() {
+                    None
+                } else {
+                    Some(self.fw_image_path.clone())
+                },
+                if self.os_dnx_path.is_empty() {
+                    None
+                } else {
+                    Some(self.os_dnx_path.clone())
+                },
+                if self.os_image_path.is_empty() {
+                    None
+                } else {
+                    Some(self.os_image_path.clone())
+                },
+                None, // misc_dnx
+                Some(self.config.gp_flags),
+                Some(self.config.ifwi_wipe_enable),
+            )
+            .with_defaults();
 
         self.add_log(LogLevel::Info, "Operation started");
 
