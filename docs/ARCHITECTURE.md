@@ -1,4 +1,4 @@
-# DnX Protocol Complete Implementation Plan
+# DnX-rs System Architecture and Implementation Details
 
 ## 一、协议全景分析 (Protocol Overview)
 
@@ -181,7 +181,7 @@ crates/dnx-core/
 
 ## 三、实施路线图 (Implementation Roadmap)
 
-### Phase 1: 核心协议层 (Completed ✅)
+### Phase 1: Core Protocol Layer [Done]
 1. [x] 常量定义 (`protocol/constants.rs`) - **Done**
 2. [x] ACK 解析器 (`protocol/ack.rs`) - **Done** (支持变长 ACK)
 3. [x] 头结构定义 (`protocol/header.rs`) - **Done**
@@ -189,7 +189,7 @@ crates/dnx-core/
 5. [x] nusb 实现重构 (`transport/nusb.rs`) - **Done**
 6. [x] Mock Transport (`transport/mock.rs`) - **Done**
 
-### Phase 2: 固件/镜像处理 (Completed ✅)
+### Phase 2: Firmware and Image Handling [Done]
 1. [x] FW 镜像解析 (`payload/firmware.rs`) - **Done**
    - [x] DnX Header 校验
    - [x] Profile Header 提取与解析
@@ -199,7 +199,7 @@ crates/dnx-core/
    - [x] OSIP 结构解析
    - [x] 镜像分块逻辑 (OsChunkIterator, OsChunkState)
 
-### Phase 3: 状态机完善 (Completed ✅)
+### Phase 3: State Machine Implementation [Done]
 1. [x] 完整状态定义 (`state/machine.rs`) - **Done**
 2. [x] 核心 ACK Handler 框架 (`state/handlers.rs`) - **Done**
 3. [x] Payload 逻辑集成 - **Done**
@@ -212,7 +212,7 @@ crates/dnx-core/
    - [x] 优化设备发现 (100ms 快速轮询代替 1s 轮询，支持极短窗口期)
 5. [ ] 设备重枚举处理 (PID 0E004 -> 0A14 切换逻辑) - **Pending real hardware testing**
 
-### Phase 4: 事件系统与 UI 层 (Completed ✅)
+### Phase 4: Event System and UI Layer [Done]
 1. [x] Event/Observer 系统 (`events.rs`) - **Done**
 2. [x] Session 编排器 (`session.rs`) - **Done**
 3. [x] CLI 重构 (`apps/cli`) - **Done**
@@ -221,7 +221,7 @@ crates/dnx-core/
    - [x] 后台线程运行 Session (解决 UI 冻结)
    - [x] 实时进度条与详细日志视图
 
-### Phase 5: 测试与文档 (In Progress)
+### Phase 5: Testing and Documentation [In Progress]
 1. [x] Mock Transport 基础测试 - **Done** (12 tests passing)
 2. [x] Payload 单元测试 (chunk iterator, chunk state)
 3. [ ] 状态机集成测试 (需要模拟完整协议流程)

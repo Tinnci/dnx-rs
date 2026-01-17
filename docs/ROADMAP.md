@@ -1,4 +1,4 @@
-# dnx-rs 功能规划与流程优化
+# DnX-rs Roadmap and Feature Planning
 
 ## 当前架构回顾
 
@@ -22,16 +22,16 @@ dnx-rs/
 
 ## 功能集成矩阵
 
-| 功能 | xtask | CLI | TUI | dnx-core |
+| Feature | xtask | CLI | TUI | dnx-core |
 |------|-------|-----|-----|----------|
-| 固件分析 | ✅ analyze | ✅ analyze | ❌ | ✅ FuphHeader |
-| IFWI 版本 | ✅ ifwi-version | ✅ ifwi-version | ❌ | ✅ ifwi_version |
-| 固件提取 | ✅ firmware extract | ❌ | ❌ | ❌ |
-| 固件比较 | ✅ firmware compare | ❌ | ❌ | ❌ |
-| 固件验证 | ✅ firmware validate | ❌ | ❌ | ❌ |
-| DnX 下载 | ✅ run | ✅ download | ✅ | ✅ Session |
-| 构建/测试 | ✅ build/test | ❌ | ❌ | ❌ |
-| 代码质量 | ✅ check | ❌ | ❌ | ❌ |
+| Firmware Analysis | [Done] analyze | [Done] analyze | [Planned] | [Done] FuphHeader |
+| IFWI Version | [Done] ifwi-version | [Done] ifwi-version | [Planned] | [Done] ifwi_version |
+| Firmware Extract | [Done] firmware extract | [No] | [No] | [No] |
+| Firmware Compare | [Done] firmware compare | [No] | [No] | [No] |
+| Firmware Validate | [Done] firmware validate | [No] | [No] | [No] |
+| DnX Download | [Done] run | [Done] download | [Done] | [Done] Session |
+| Build/Test | [Done] build/test | [No] | [No] | [No] |
+| Code Quality | [Done] check | [No] | [No] | [No] |
 
 ## TUI 改进计划
 
@@ -49,7 +49,7 @@ dnx-rs/
 │ Profile: eaglespeak (Z3580)                          │
 │ ┌─ dnx_fwr.bin ─────────────┐ ┌─ dnx_osr.img ──────┐ │
 │ │ Size: 109,812 bytes       │ │ Size: 12.58 MB     │ │
-│ │ RSA: ✅ Intel Signed      │ │ Type: Android Boot │ │
+│ │ RSA: [Success] Intel Signed   │ │ Type: Android Boot │ │
 │ │ Token: $CHT (TNG A0)      │ │ Kernel: ~5 MB      │ │
 │ │ Chaabi: 72 KB             │ │ Ramdisk: ~7 MB     │ │
 │ └───────────────────────────┘ └────────────────────┘ │
@@ -69,10 +69,10 @@ dnx-rs/
 ```
 ┌─ Firmware Comparison ────────────────────────────────┐
 │ eaglespeak vs blackburn                              │
-│ ├─ RSA Signature: ✅ Identical                       │
-│ ├─ Structure: ✅ Identical                           │
+│ ├─ RSA Signature: [Identical]                        │
+│ ├─ Structure: [Identical]                            │
 │ ├─ Token diff: 282 bytes (0.31%)                     │
-│ └─ CDPH CRC: ❌ Different                            │
+│ └─ CDPH CRC: [Different]                             │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -84,7 +84,7 @@ dnx-rs/
 │ → DnX Header: Size=109812, GP=0, CS=0x1ACF4          │
 │ ← DCFI00 (Chaabi request)                            │
 │ → Chaabi: 90136 bytes                                │
-│ ⏳ Waiting for ACK...                                 │
+│ [Running] Waiting for ACK...                          │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -158,21 +158,21 @@ rsa_hash = "0bda531fdad65dab..."
 
 ## 实现优先级
 
-### P0 - 关键
-1. ✅ FUPH 解析器 (已完成)
-2. ✅ 统一的固件分析 (xtask 已实现)
-3. ⬜ TUI 固件信息面板
+### P0 - Critical
+1. [Done] FUPH Parser
+2. [Done] Unified Firmware Analysis
+3. [Planned] TUI Firmware Info Panel
 
-### P1 - 重要
-4. ⬜ 将固件分析逻辑移至 dnx-core
-5. ⬜ TUI 版本信息显示
-6. ⬜ 配置文件支持 (.dnx/profiles/)
+### P1 - Important
+4. [Done] Move firmware analysis to dnx-core
+5. [Planned] TUI Version Info Display
+6. [Done] Config File Support (.dnx/profiles/ or --config)
 
-### P2 - 增强
-7. ⬜ TUI 实时协议监控
-8. ⬜ TUI 固件比较视图
-9. ⬜ xtask 自动化测试流程
-10. ⬜ GitHub Actions CI/CD
+### P2 - Enhancement
+7. [Done] TUI Real-time Protocol Monitor
+8. [Planned] TUI Firmware Comparison View
+9. [Done] xtask automated test workflow
+10. [Planned] GitHub Actions CI/CD
 
 ## 下一步行动
 
