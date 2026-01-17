@@ -848,3 +848,155 @@
 
 
 *报告生成完毕*
+
+---
+
+# 附录：Intel xFSTK Stitcher 工具参考
+
+本节记录 Intel xFSTK Stitcher 工具的配置文件格式和签名机制，用于理解 DnX 固件的构建和签名过程。
+
+**参考来源**: [sign_stitch_intel (GitHub)](https://github.com/alan-shen/sign_stitch_intel)
+
+## Image Attributes (镜像属性)
+
+以下是 xfstk-stitcher 使用的镜像类型属性值（用于 XML 配置）：
+
+| 属性值 | 类型 | 描述 |
+|--------|------|------|
+| 0x00 | Signed | 已签名 OS 内核镜像 |
+| 0x01 | Unsigned | 未签名 OS 内核镜像 |
+| 0x02 | Signed | 已签名根文件系统镜像 |
+| 0x03 | Unsigned | 未签名根文件系统镜像 |
+| 0x04 | Signed | 已签名启动画面位图 |
+| 0x05 | Unsigned | 未签名启动画面位图 |
+| 0x06 | Signed | 已签名"被篡改或未签名内核"警告位图 |
+| 0x07 | Unsigned | 未签名"被篡改或未签名内核"警告位图 |
+| 0x08 | Signed | 已签名第二阶段 IAFW 镜像 |
+| 0x09 | Unsigned | 未签名第二阶段 IAFW 镜像 |
+| 0x0A | Signed | 已签名 COS (Charging OS) 内核镜像 |
+| 0x0B | Unsigned | 未签名 COS 内核镜像 |
+| 0x0C | Signed | 已签名 FOTAOS (OTA 固件更新) 内核镜像 |
+| 0x0D | Unsigned | 未签名 FOTAOS 内核镜像 |
+| 0x0E | Signed | 已签名 POS (Provisioning OS) 内核镜像 |
+| 0x0F | Unsigned | 未签名 POS 内核镜像 |
+| 0x10 | Signed | 已签名 POS & COS 联合内核镜像 |
+| 0x11 | Unsigned | 未签名 POS & COS 联合内核镜像 |
+| 0x12-0xEF | Reserved | Intel 保留 |
+| 0xF0-0xFF | OEM | 供 OEM 使用 |
+
+## 配置文件格式说明
+
+### 示例配置文件 (`logo-config.txt`)
+
+```ini
+' Penwell D0 Example Config file
+' This file provides stitching settings.
+
+'-------- Settings Section --------
+' validValues = MSTN,MFDA0,MFDB0,MFDC0,MFDD0,CLVA0,TNGA0
+PlatformType = MFDD0
+ImageType = OSUSB
+ImageName = ./output/OUTPUTFILE_ABCD
+```
+
+### 平台类型 (PlatformType)
+
+| 代码 | 平台名称 | 处理器系列 |
+|------|----------|-----------|
+| MSTN | Medfield | Z2xxx |
+| MFDA0 | Moorefield A0 | Z35xx (早期) |
+| MFDB0 | Moorefield B0 | Z35xx (修订版) |
+| MFDC0 | Moorefield C0 | Z35xx (修订版) |
+| MFDD0 | Moorefield D0 | Z35xx/Z37xx (生产版) |
+| CLVA0 | Clover Trail A0 | Z2760 |
+| TNGA0 | Tangier A0 | Z3580/Z3530 (Moorefield 代号) |
+
+**注意**: 我们的固件中检测到 `$CHT` 标记，表示 **TNG A0 (Tangier A0)** 步进版本。
+
+### 镜像类型 (ImageType)
+
+| 类型 | 用途 |
+|------|------|
+| OSUSB | OS USB 恢复镜像 (DnX OS) |
+| FWUSB | FW USB 更新镜像 (DnX FW) |
+| IFWI | 集成固件镜像 |
+
+### 密钥索引说明
+
+```ini
+' Key selection is based on SMIP entries
+' Index reference:
+' 0: SMIP, primary chaabi fw         <- Chaabi 主固件签名
+' 1: SMIP, SCU + Punit               <- SCU/Punit 微代码签名
+' 2: IA fw, security ext fw, OS      <- IA 固件、安全扩展、OS
+' 3: IA fw, security ext fw, OS      <- (备用)
+' 4: IA fw, security ext fw, OS      <- (备用)
+
+Public Key0 = ../keys/C0_0_public.key
+Private Key0 = ../keys/C0_0_private.key
+Public Key1 = ../keys/CRAK_1_public.key
+Private Key1 = ../keys/C0_234_public.key
+Public Key2 = ../keys/C0_234_public.key
+Private Key2 = ../keys/C0_234_private.key
+```
+
+**密钥用途**:
+- **Key0**: Chaabi 固件签名密钥（最高安全级别）
+- **Key1**: SCU/Punit 签名密钥（CRAK = Crash Recovery And Key）
+- **Key2-4**: IA 固件和 OS 签名密钥
+
+### 文件组件说明
+
+| 配置项 | 描述 |
+|--------|------|
+| `SCU uCode` | SCU (System Control Unit) 微代码 |
+| `Punit uCode` | Punit (Power Unit) 微代码 |
+| `x86 FW Boot` | IA32 启动固件 |
+| `Spectra-FTL` | Flash Translation Layer |
+| `Validation Hooks` | OEM 验证钩子 |
+| `DnxFile_ToSign` | 待签名的 DnX 文件 |
+| `DnxFile_Signed` | 输出的已签名 DnX 文件 |
+
+### 安全固件组件
+
+| 配置项 | 描述 |
+|--------|------|
+| `ICache_Image` | 指令缓存镜像 (Chaabi) |
+| `Resident_Image` | 常驻镜像 (Chaabi) |
+| `Extended_FW` | 扩展固件/应用 |
+| `SIGNED_VED_FW` | 视频编解码固件 (MTX) |
+| `SIGNED_PATCH_BIN` | SCU ROM 补丁 |
+
+## 与本项目固件的对应关系
+
+根据配置文件分析，我们的 `dnx_fwr.bin` 文件结构对应关系如下：
+
+```
+dnx_fwr.bin 结构映射:
+┌─────────────────────────────────────────────────────────────┐
+│ 区域                    │ xFSTK 组件                        │
+├─────────────────────────────────────────────────────────────┤
+│ 0x0088 RSA 签名         │ Key0 签名 (Chaabi 主密钥)         │
+├─────────────────────────────────────────────────────────────┤
+│ 0x0188 VRL/SCU 代码     │ SCU uCode + Punit uCode           │
+├─────────────────────────────────────────────────────────────┤
+│ 0x04AF4 $CHT Token      │ TNGA0 平台特定配置                │
+├─────────────────────────────────────────────────────────────┤
+│ 0x08AF4 Chaabi FW       │ ICache + Resident + Extended_FW   │
+├─────────────────────────────────────────────────────────────┤
+│ 0x1ACDC CDPH Footer     │ 签名校验和                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 相关工具
+
+| 工具 | 用途 |
+|------|------|
+| **xfstk-stitcher** | 固件拼接和签名工具 |
+| **xfstk-dldr-solo** | DnX 下载器 (单设备) |
+| **xfstk-dldr-gui** | DnX GUI 下载工具 |
+| **sign_stitch_intel** | 开源签名/拼接脚本集合 |
+
+---
+
+*附录完毕*
