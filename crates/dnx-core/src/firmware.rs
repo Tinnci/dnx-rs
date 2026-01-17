@@ -204,14 +204,14 @@ impl FirmwareAnalysis {
 
         // RSA
         if let Some(rsa) = &self.rsa_signature {
-            out.push_str(&format!("\nRSA Signature:\n"));
+            out.push_str("\nRSA Signature:\n");
             out.push_str(&format!("  Offset: 0x{:X}\n", rsa.offset));
             out.push_str(&format!("  Hash: {}...\n", &rsa.hash[..32]));
         }
 
         // Token
         if let Some(token) = &self.token {
-            out.push_str(&format!("\nToken:\n"));
+            out.push_str("\nToken:\n");
             out.push_str(&format!(
                 "  Marker: {} ({})\n",
                 token.marker, token.platform
@@ -222,7 +222,7 @@ impl FirmwareAnalysis {
 
         // Chaabi
         if let Some(chaabi) = &self.chaabi {
-            out.push_str(&format!("\nChaabi:\n"));
+            out.push_str("\nChaabi:\n");
             out.push_str(&format!("  Offset: 0x{:X}\n", chaabi.offset));
             out.push_str(&format!(
                 "  Size: {} bytes ({:.1} KB)\n",
@@ -233,7 +233,7 @@ impl FirmwareAnalysis {
 
         // Versions
         if let Some(v) = &self.versions {
-            out.push_str(&format!("\nVersions:\n"));
+            out.push_str("\nVersions:\n");
             out.push_str(&format!("  IFWI: {}\n", v.ifwi));
             out.push_str(&format!("  SCU: {}\n", v.scu));
             out.push_str(&format!("  Chaabi: {}\n", v.chaabi));
@@ -534,31 +534,31 @@ fn extract_token_info(_data: &[u8], markers: &[MarkerInfo]) -> Option<TokenInfo>
     let cht = markers.iter().find(|m| m.name == "$CHT");
     let ch00 = markers.iter().find(|m| m.name == "CH00");
 
-    if let (Some(cht), Some(ch00)) = (cht, ch00) {
-        if cht.position < ch00.position {
-            let offset = cht.position.saturating_sub(0x80);
-            let size = ch00.position.saturating_sub(0x80) - offset;
-            return Some(TokenInfo {
-                marker: "$CHT".to_string(),
-                offset,
-                size,
-                platform: "TNG A0 (Tangier A0)".to_string(),
-            });
-        }
+    if let (Some(cht), Some(ch00)) = (cht, ch00)
+        && cht.position < ch00.position
+    {
+        let offset = cht.position.saturating_sub(0x80);
+        let size = ch00.position.saturating_sub(0x80) - offset;
+        return Some(TokenInfo {
+            marker: "$CHT".to_string(),
+            offset,
+            size,
+            platform: "TNG A0 (Tangier A0)".to_string(),
+        });
     }
 
     let dtkn = markers.iter().find(|m| m.name == "DTKN");
-    if let (Some(dtkn), Some(ch00)) = (dtkn, ch00) {
-        if dtkn.position < ch00.position {
-            let offset = dtkn.position;
-            let size = ch00.position.saturating_sub(0x80) - offset;
-            return Some(TokenInfo {
-                marker: "DTKN".to_string(),
-                offset,
-                size,
-                platform: "TNG B0+".to_string(),
-            });
-        }
+    if let (Some(dtkn), Some(ch00)) = (dtkn, ch00)
+        && dtkn.position < ch00.position
+    {
+        let offset = dtkn.position;
+        let size = ch00.position.saturating_sub(0x80) - offset;
+        return Some(TokenInfo {
+            marker: "DTKN".to_string(),
+            offset,
+            size,
+            platform: "TNG B0+".to_string(),
+        });
     }
 
     None

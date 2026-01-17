@@ -44,19 +44,19 @@ impl EventHandler {
                     .checked_sub(last_tick.elapsed())
                     .unwrap_or(Duration::ZERO);
 
-                if event::poll(timeout).unwrap_or(false) {
-                    if let Ok(evt) = event::read() {
-                        let event = match evt {
-                            event::Event::Key(key) => Some(Event::Key(key)),
-                            event::Event::Mouse(mouse) => Some(Event::Mouse(mouse)),
-                            event::Event::Resize(w, h) => Some(Event::Resize(w, h)),
-                            _ => None,
-                        };
-                        if let Some(e) = event {
-                            if sender.send(e).is_err() {
-                                break;
-                            }
-                        }
+                if event::poll(timeout).unwrap_or(false)
+                    && let Ok(evt) = event::read()
+                {
+                    let event = match evt {
+                        event::Event::Key(key) => Some(Event::Key(key)),
+                        event::Event::Mouse(mouse) => Some(Event::Mouse(mouse)),
+                        event::Event::Resize(w, h) => Some(Event::Resize(w, h)),
+                        _ => None,
+                    };
+                    if let Some(e) = event
+                        && sender.send(e).is_err()
+                    {
+                        break;
                     }
                 }
 

@@ -68,6 +68,7 @@ impl SessionConfig {
 
     /// Merge CLI-style overrides into this config.
     /// Only overwrites fields that have explicit values (Some).
+    #[allow(clippy::too_many_arguments)]
     pub fn merge(
         mut self,
         fw_dnx: Option<String>,
@@ -93,15 +94,13 @@ impl SessionConfig {
         if let Some(v) = misc_dnx {
             self.misc_dnx_path = Some(v);
         }
-        if let Some(v) = gp_flags {
-            if v != 0 {
-                self.gp_flags = v;
-            }
+        if let Some(v) = gp_flags
+            && v != 0
+        {
+            self.gp_flags = v;
         }
-        if let Some(v) = ifwi_wipe {
-            if v {
-                self.ifwi_wipe_enable = true;
-            }
+        if ifwi_wipe == Some(true) {
+            self.ifwi_wipe_enable = true;
         }
         self
     }

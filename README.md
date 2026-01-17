@@ -36,17 +36,42 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ### 构建与运行
 
-本项目使用 `cargo xtask` 代理常规任务：
+#### 使用 xtask (推荐的开发流)
+
+```bash
+# 构建整个项目
+cargo xtask build
+
+# 运行代码质量检查 (fmt + clippy)
+cargo xtask check
+
+# 运行测试
+cargo xtask test
+
+# 使用 CLI 执行固件下载 (通过 profile)
+cargo xtask run --profile eaglespeak
+
+# 分析固件文件
+cargo xtask analyze assets/firmware/eaglespeak/dnx_fwr.bin
+
+# 提取 IFWI 版本信息
+cargo xtask ifwi-version assets/firmware/eaglespeak/dnx_fwr.bin
+```
+
+#### 直接运行应用
 
 ```bash
 # 启动交互式 TUI
-cargo xtask run --tui
+cargo run -p dnx-tui
 
-# 使用 CLI 执行固件下载
-cargo xtask run --cli -- --fw-dnx path/to/dnx_fwr.bin --os-image path/to/dnx_osr.img
+# 使用 CLI (带参数)
+cargo run -p dnx-cli -- --fw-dnx path/to/dnx_fwr.bin --os-image path/to/dnx_osr.img
 
-# 执行固件深度分析
-cargo xtask analyze path/to/firmware.bin
+# CLI 使用配置文件
+cargo run -p dnx-cli -- --config my_config.toml
+
+# CLI 使用预设 profile
+cargo run -p dnx-cli -- --profile eaglespeak
 ```
 
 ## 项目结构

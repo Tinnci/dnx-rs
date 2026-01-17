@@ -369,7 +369,7 @@ fn analyze_directory(dir: &Path, format: OutputFormat) -> Result<()> {
         if path.is_dir() {
             println!("\n📁 {}/", path.file_name().unwrap().to_string_lossy());
             analyze_directory(&path, format)?;
-        } else if path.extension().map_or(false, |e| e == "bin" || e == "img") {
+        } else if path.extension().is_some_and(|e| e == "bin" || e == "img") {
             analyze_file(&path, format)?;
         }
     }
@@ -707,42 +707,42 @@ fn cmd_firmware_extract(source: &Path, output: Option<PathBuf>, component: &str)
 
     let extract_all = component == "all";
 
-    if component == "token" || extract_all {
-        if let (Some(cht), Some(ch00)) = (cht_pos, ch00_pos) {
-            let start = cht.saturating_sub(0x80);
-            let end = ch00.saturating_sub(0x80);
-            let token_data = &data[start..end];
-            let path = output_dir.join("token.bin");
-            std::fs::write(&path, token_data)?;
-            println!("  ✅ Extracted token: {} bytes", token_data.len());
-        }
+    if (component == "token" || extract_all)
+        && let (Some(cht), Some(ch00)) = (cht_pos, ch00_pos)
+    {
+        let start = cht.saturating_sub(0x80);
+        let end = ch00.saturating_sub(0x80);
+        let token_data = &data[start..end];
+        let path = output_dir.join("token.bin");
+        std::fs::write(&path, token_data)?;
+        println!("  [Done] Extracted token: {} bytes", token_data.len());
     }
 
-    if component == "chaabi" || extract_all {
-        if let (Some(ch00), Some(cdph)) = (ch00_pos, cdph_pos) {
-            let start = ch00.saturating_sub(0x80);
-            let chaabi_data = &data[start..cdph];
-            let path = output_dir.join("chaabi.bin");
-            std::fs::write(&path, chaabi_data)?;
-            println!("  ✅ Extracted chaabi: {} bytes", chaabi_data.len());
-        }
+    if (component == "chaabi" || extract_all)
+        && let (Some(ch00), Some(cdph)) = (ch00_pos, cdph_pos)
+    {
+        let start = ch00.saturating_sub(0x80);
+        let chaabi_data = &data[start..cdph];
+        let path = output_dir.join("chaabi.bin");
+        std::fs::write(&path, chaabi_data)?;
+        println!("  [Done] Extracted chaabi: {} bytes", chaabi_data.len());
     }
 
-    if component == "ifwi" || extract_all {
-        if let Some(cht) = cht_pos {
-            let end = cht.saturating_sub(0x80);
-            let ifwi_data = &data[..end];
-            let path = output_dir.join("ifwi.bin");
-            std::fs::write(&path, ifwi_data)?;
-            println!("  ✅ Extracted ifwi: {} bytes", ifwi_data.len());
-        }
+    if (component == "ifwi" || extract_all)
+        && let Some(cht) = cht_pos
+    {
+        let end = cht.saturating_sub(0x80);
+        let ifwi_data = &data[..end];
+        let path = output_dir.join("ifwi.bin");
+        std::fs::write(&path, ifwi_data)?;
+        println!("  [Done] Extracted ifwi: {} bytes", ifwi_data.len());
     }
 
     if component == "header" || extract_all {
         let header = &data[..0x188.min(data.len())];
         let path = output_dir.join("header.bin");
         std::fs::write(&path, header)?;
-        println!("  ✅ Extracted header: {} bytes", header.len());
+        println!("  [Done] Extracted header: {} bytes", header.len());
     }
 
     if !extract_all && !matches!(component, "token" | "chaabi" | "ifwi" | "header") {
